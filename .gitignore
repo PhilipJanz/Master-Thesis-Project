@@ -2,3 +2,5 @@ data/raw_source/*
 data/processed/*
 literature/*
 orga/*
+
+__pycache__
