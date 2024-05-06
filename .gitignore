@@ -4,3 +4,5 @@ literature/*
 orga/*
 
 __pycache__
+
+.ipynb_checkpoints

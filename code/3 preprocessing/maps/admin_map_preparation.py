@@ -2,14 +2,7 @@ from config import *
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import os
-
 import geopandas as gpd
-import shapely
-import rasterio
-from rasterio.plot import show
-import rasterio.features
-from rasterio.enums import Resampling
 
 from maps.map_functions import merge_regions
 
