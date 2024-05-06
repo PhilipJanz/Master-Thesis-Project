@@ -1,5 +1,3 @@
-import pandas as pd
-
 from yield_.yield_functions import *
 
 from config import *

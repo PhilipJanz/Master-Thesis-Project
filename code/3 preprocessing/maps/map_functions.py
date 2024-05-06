@@ -1,4 +1,3 @@
-import geopandas as gpd
 from shapely.ops import unary_union
 import pandas as pd
 
