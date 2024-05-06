@@ -40,6 +40,18 @@ def read_ethiopia_yield():
     # filter out the short rainy season 'Belg' since there is not enough data for modeling (68 after cleaning)
     ethiopia_yield_df = ethiopia_yield_df[ethiopia_yield_df.season != 'Belg']
     ethiopia_yield_df = ethiopia_yield_df.dropna()
+    # further renaming
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Jijiga", "adm2"] = "Fafan"
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Kembata Alaba Tembaro\r\n", "adm2"] = "Kembata Tembaro"
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Alaba", "adm2"] = "Halaba"
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Jijiga", "adm2"] = "Fafan"
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Silltie", "adm2"] = "Siltie"
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Sidama", "adm1"] = "Sidama"
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Konta", "adm1"] = "South West Ethiopia"
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Sheka", "adm1"] = "South West Ethiopia"
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Keffa", "adm1"] = "South West Ethiopia"
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Dawro", "adm1"] = "South West Ethiopia"
+    ethiopia_yield_df.loc[ethiopia_yield_df.adm2 == "Bench Maji", "adm1"] = "South West Ethiopia"
     print(f"Loaded {len(ethiopia_yield_df)} yield datapoints for Ethiopia.")
     return ethiopia_yield_df
 
