@@ -77,9 +77,16 @@ plt.tight_layout()
 plt.savefig(POCESSED_DATA_DIR / "soil/plots/soil_property_region_level.jpg", dpi=600)
 #plt.show()
 
-# plot results
+# plot cropland area
 fig, ax = plt.subplots(figsize=(8, 8))
 adm_map.plot(column='est_cropland_area', cmap="YlGn", legend=True, ax=ax)
 plt.title("Estimated maize cropland area (ha)")
 plt.savefig(POCESSED_DATA_DIR / "soil/plots/estimated_cropland_area.jpg", dpi=600)
+plt.show()
+
+# plot results
+fig, ax = plt.subplots(figsize=(8, 8))
+adm_map.plot(column='elevation', cmap="GnBu", legend=True, ax=ax)
+plt.title("Average elevation of cropland area")
+plt.savefig(POCESSED_DATA_DIR / "soil/plots/elevation.jpg", dpi=600)
 plt.show()
