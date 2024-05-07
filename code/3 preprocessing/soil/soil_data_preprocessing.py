@@ -16,7 +16,7 @@ crop_mask, target_transform, target_crs = load_geoglam_crop_mask(lon_min=22, lon
 
 # load soil data with same transformation like the crop mask.
 # ALERT!: Soil-data must be provided with the exact same geographic boundaries like given above
-soil_nutrient_maps, soil_nutrients = load_soil_data(target_transform, target_crs,
+soil_nutrient_maps, soil_nutrients = load_soil_data(target_crs,
                                                     target_width=crop_mask.shape[1],
                                                     target_height=crop_mask.shape[0])
 
@@ -86,7 +86,7 @@ plt.show()
 
 # plot results
 fig, ax = plt.subplots(figsize=(8, 8))
-adm_map.plot(column='elevation', cmap="GnBu", legend=True, ax=ax)
+adm_map.plot(column='elevation', cmap="RdYlGn_r", legend=True, ax=ax)
 plt.title("Average elevation of cropland area")
 plt.savefig(POCESSED_DATA_DIR / "soil/plots/elevation.jpg", dpi=600)
 plt.show()
