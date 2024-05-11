@@ -1,21 +1,13 @@
-from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import geopandas as gpd
 
 from config import *
+from crop_calendar.crop_calendar_functions import copy_cc, plot_seasonal_crop_calendar, plot_growth_time
 
 """
 This script reads crop calendars (CC) from different sources to merge, clean and plots them. 
 """
-
-
-def copy_cc(cc_df, column, from_name, to_name):
-    cc_df = cc_df[cc_df[column] != to_name]
-    copy_df = cc_df[cc_df[column] == from_name].copy()
-    copy_df[column] = to_name
-    return pd.concat([cc_df, copy_df])
 
 
 
@@ -106,5 +98,15 @@ for _, row in my_ethiopia_cc[np.any(my_ethiopia_cc.isna(), axis=1)].iterrows():
 my_cc = pd.concat([my_cc, my_ethiopia_cc])
 assert not np.any(my_cc.isna()), "There is still missing data in 'my_cc' suggesting you missed to specify a case. Check it out!"
 
+# estimate growth time
+my_cc["growth_time"] = (my_cc["eos_s"] - my_cc["sos_s"]) % 36
+
 # save
 my_cc.drop("centroid", axis=1).to_csv(POCESSED_DATA_DIR / "crop calendar/processed_crop_calendar.csv", index=False)
+
+# plot
+plot_cc_df = pd.merge(adm_map, my_cc.drop("centroid", axis=1), on=["country", "adm1", "adm2"])
+
+plot_seasonal_crop_calendar(plot_cc_df=plot_cc_df.copy(), column="sos_s", file_name="start_of_season")
+plot_seasonal_crop_calendar(plot_cc_df=plot_cc_df.copy(), column="eos_e", file_name="end_of_season")
+plot_growth_time(plot_cc_df)
