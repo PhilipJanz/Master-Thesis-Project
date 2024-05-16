@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
 import geopandas as gpd
