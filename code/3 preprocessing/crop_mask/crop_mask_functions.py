@@ -33,13 +33,9 @@ def load_geoglam_crop_mask(lon_min=None, lat_max=None, lon_max=None, lat_min=Non
             window = crop_mask_src.window(lon_min, lat_min, lon_max, lat_max)
             crop_mask = crop_mask_src.read(1, window=window)
             transform = crop_mask_src.window_transform(window)
-            # Update width and height to reflect the dimensions of the cropped area
-            width, height = window.width, window.height
         else:
             crop_mask = crop_mask_src.read(1)
             transform = crop_mask_src.transform
-            width = crop_mask_src.width
-            height = crop_mask_src.height
 
         crs = crop_mask_src.crs
 
