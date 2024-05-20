@@ -1,9 +1,10 @@
-from config import *
+from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import geopandas as gpd
 
+from config import *
 from maps.map_functions import merge_regions
 
 """
@@ -129,12 +130,43 @@ zambia_map.loc[zambia_map.adm2 == "Itezhi-tezhi", "adm2"] = "Itezhi-Tezhi"
 zambia_map.loc[zambia_map.adm2 == "Itezhi-Tezhi", "adm1"] = "Southern"
 print([region for region in zambia_map.adm2.values if region not in adm_df.adm2.values])
 
-#### COMBINING AND SAVING #####
+
+#### COMBINING PLOTTING AND SAVING #####
 comb_map = pd.concat([ethiopia_map, tanzania_map, kenya_map, malawi_map, zambia_map])[["country", "adm1", "adm2", "geometry"]]
 comb_map = pd.merge(comb_map, adm_df, how="right", on=["country", "adm1", "adm2"])
 assert not np.any(comb_map.geometry.isna()), f"There is missing geometry information for: {adm_df[comb_map.geometry.isna()]}"
-# make plot TODO gets much better
-comb_map.plot()
-plt.savefig(POCESSED_DATA_DIR / "admin map/plots/plain_comb_map.jpg", dpi=600)
+
+# calculated center point for comparison and easier plotting
+comb_map['centroid'] = comb_map.representative_point()
+
+# make plot
+africa_map = gpd.read_file(SOURCE_DATA_DIR / 'admin map/africa_countries/Africa_Countries.shp')
+fig, ax = plt.subplots(figsize=(10, 12))
+africa_map[africa_map.NAME == "Tanzania"].plot(color=TANZANIA_COLOR, edgecolor=TANZANIA_COLOR, linewidth=0.3, ax=ax, alpha=0.2)
+comb_map[comb_map.country == "Tanzania"].plot(color=TANZANIA_COLOR, edgecolor='white', linewidth=0.3, ax=ax, alpha=0.8)
+africa_map[africa_map.NAME == "Zambia"].plot(color=ZAMBIA_COLOR, edgecolor=ZAMBIA_COLOR, linewidth=0.3, ax=ax, alpha=0.2)
+comb_map[comb_map.country == "Zambia"].plot(color=ZAMBIA_COLOR, edgecolor='white', linewidth=0.3, ax=ax, alpha=0.8)
+africa_map[africa_map.NAME == "Ethiopia"].plot(color=ETHIOPIA_COLOR, edgecolor=ETHIOPIA_COLOR, linewidth=0.3, ax=ax, alpha=0.2)
+comb_map[comb_map.country == "Ethiopia"].plot(color=ETHIOPIA_COLOR, edgecolor='white', linewidth=0.3, ax=ax, alpha=0.8)
+africa_map[africa_map.NAME == "Malawi"].plot(color=MALAWI_COLOR, edgecolor=MALAWI_COLOR, linewidth=0.3, ax=ax, alpha=0.2)
+comb_map[comb_map.country == "Malawi"].plot(color=MALAWI_COLOR, edgecolor='white', linewidth=0.3, ax=ax, alpha=0.8)
+africa_map[africa_map.NAME == "Kenya"].plot(color=KENYA_COLOR, edgecolor=KENYA_COLOR, linewidth=0.3, ax=ax, alpha=0.2)
+comb_map[comb_map.country == "Kenya"].plot(color=KENYA_COLOR, edgecolor='white', linewidth=0.3, ax=ax, alpha=0.8)
+# Create a legend
+ax.legend(handles=[Patch(color=ETHIOPIA_COLOR, label='Ethiopia', alpha=0.8),
+                   Patch(color=KENYA_COLOR, label='Kenya', alpha=0.8),
+                   Patch(color=TANZANIA_COLOR, label='Tanzania', alpha=0.8),
+                   Patch(color=MALAWI_COLOR, label='Malawi', alpha=0.8),
+                   Patch(color=ZAMBIA_COLOR, label='Zambia', alpha=0.8)], loc="upper left")
+# Iterate through rows to place labels
+for idx, row in comb_map.iterrows():
+    if row.adm2 == "None":
+        plt.annotate(text=row['adm1'], xy=(row['centroid'].x, row['centroid'].y),
+                     horizontalalignment='center', fontsize=5, color="black")
+    else:
+        plt.annotate(text=row['adm2'], xy=(row['centroid'].x, row['centroid'].y),
+                     horizontalalignment='center', fontsize=5, color="black")
+plt.savefig(POCESSED_DATA_DIR / "admin map/plots/plain_comb_map.jpg", dpi=800)
+
 # save geodata
 comb_map.to_file(POCESSED_DATA_DIR / "admin map/comb_map.shp", index=False)
