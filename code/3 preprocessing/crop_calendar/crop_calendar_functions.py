@@ -3,14 +3,15 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
 
-from config import POCESSED_DATA_DIR
+from config import PROCESSED_DATA_DIR
 
 
 def copy_cc(cc_df, column, from_name, to_name):
-    cc_df = cc_df[cc_df[column] != to_name]
     copy_df = cc_df[cc_df[column] == from_name].copy()
     copy_df[column] = to_name
-    return pd.concat([cc_df, copy_df])
+    if column == "adm2":
+        copy_df["adm1"] = cc_df.loc[cc_df[column] == to_name, "adm1"][0]
+    return pd.concat([cc_df[cc_df[column] != to_name], copy_df])
 
 
 def plot_seasonal_crop_calendar(plot_cc_df, column, file_name=None):
@@ -47,7 +48,7 @@ def plot_seasonal_crop_calendar(plot_cc_df, column, file_name=None):
     cbar.set_ticklabels(ticklabels[(ticks > 0) & (ticks <= np.max(vmax))])
     # Save plot if wanted
     if file_name:
-        plt.savefig(POCESSED_DATA_DIR / f"crop calendar/plots/{file_name}.jpg", dpi=600)
+        plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/{file_name}.jpg", dpi=600)
     plt.show()
 
 
@@ -78,5 +79,5 @@ def plot_growth_time(plot_cc_df):
     sm.set_array([])
     fig.colorbar(sm, ax=ax, fraction=0.02, pad=0.04, label="Dekades")
     # Save plot if wanted
-    plt.savefig(POCESSED_DATA_DIR / f"crop calendar/plots/growth_time.jpg", dpi=600)
+    plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/growth_time.jpg", dpi=600)
     plt.show()

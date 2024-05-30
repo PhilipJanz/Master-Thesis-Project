@@ -20,7 +20,7 @@ kenya_and_zambia_yield_df.head()
 
 #### SAVE ####
 comb_df = pd.concat([malawi_yield_df, tanzania_yield_df, kenya_and_zambia_yield_df, ethiopia_yield_df])
-comb_df.to_csv(POCESSED_DATA_DIR / "yield/processed_comb_yield.csv", index=False)
+comb_df.to_csv(PROCESSED_DATA_DIR / "yield/processed_comb_yield.csv", index=False)
 
 adm_df = comb_df.groupby(["country", "adm1", "adm2"]).count().reset_index()[["country", "adm1", "adm2"]]
-adm_df.to_csv(POCESSED_DATA_DIR / "yield/available_admin.csv", index=False)
+adm_df.to_csv(PROCESSED_DATA_DIR / "yield/available_admin.csv", index=False)

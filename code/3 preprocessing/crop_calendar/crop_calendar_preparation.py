@@ -12,11 +12,11 @@ This script reads crop calendars (CC) from different sources to merge, clean and
 
 
 # load  administrative boundaries with geographic information
-adm_map = gpd.read_file(POCESSED_DATA_DIR / "admin map/comb_map.shp")
+adm_map = gpd.read_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp")
 adm_map['centroid'] = adm_map.representative_point()
 
 # view different seasons for each country
-yield_df = pd.read_csv(POCESSED_DATA_DIR / "yield/processed_comb_yield.csv")
+yield_df = pd.read_csv(PROCESSED_DATA_DIR / "yield/processed_comb_yield.csv")
 print(yield_df.groupby(["country", "season"]).count().reset_index()[["country", "season"]])
 
 # load and prepare ASAP CC
@@ -33,6 +33,7 @@ asap_cc.loc[asap_cc.adm1 == "Muranga", "adm1"] = "Murang'a"
 asap_cc.loc[asap_cc.adm1 == "Keiyo-Marakwet", "adm1"] = "Elgeyo-Marakwet"
 asap_cc.loc[asap_cc.adm1 == "Muranga", "adm1"] = "Murang'a"
 asap_cc.loc[asap_cc.adm1 == "North Gonder", "adm1"] = "North Gondar"
+asap_cc.loc[asap_cc.adm1 == "South Gonder", "adm1"] = "South Gondar"
 asap_cc.loc[asap_cc.adm1 == "North Shewa R3", "adm1"] = "North Shewa (OR)"
 asap_cc.loc[asap_cc.adm1 == "North Shewa R4", "adm1"] = "North Shewa (AM)"
 
@@ -81,7 +82,6 @@ my_cc = copy_cc(my_cc, column="adm1", from_name="Siaya", to_name="Vihiga")
 my_cc = copy_cc(my_cc, column="adm1", from_name="Uasin Gishu", to_name="Elgeyo-Marakwet")
 my_cc = copy_cc(my_cc, column="adm1", from_name="Kajiado", to_name="Taita Taveta")
 assert not np.any(my_cc.isna()), "There is still missing data in 'my_cc' suggesting you missed to specify a case. Check it out!"
-xy = my_cc[my_cc.country == "Kenya"].groupby("adm1").count()["season"]
 
 # for Ethiopia the CC confuses adm1 and adm2
 ethiopia_asap_cc = asap_cc[asap_cc.country == "Ethiopia"].copy().rename(columns={"adm1": "adm2"})
@@ -94,6 +94,7 @@ for _, row in my_ethiopia_cc[np.any(my_ethiopia_cc.isna(), axis=1)].iterrows():
     print("Fill empty (", row.adm2, ") with nearest neighbor:", filled_cc.iloc[ix_nn].adm2)
     my_ethiopia_cc = copy_cc(my_ethiopia_cc, column="adm2", from_name=filled_cc.iloc[ix_nn].adm2, to_name=row.adm2)
 
+
 # merge the two cc
 my_cc = pd.concat([my_cc, my_ethiopia_cc])
 assert not np.any(my_cc.isna()), "There is still missing data in 'my_cc' suggesting you missed to specify a case. Check it out!"
@@ -102,7 +103,7 @@ assert not np.any(my_cc.isna()), "There is still missing data in 'my_cc' suggest
 my_cc["growth_time"] = (my_cc["eos_s"] - my_cc["sos_s"]) % 36
 
 # save
-my_cc.drop("centroid", axis=1).to_csv(POCESSED_DATA_DIR / "crop calendar/processed_crop_calendar.csv", index=False)
+my_cc.drop("centroid", axis=1).to_csv(PROCESSED_DATA_DIR / "crop calendar/processed_crop_calendar.csv", index=False)
 
 # plot
 plot_cc_df = pd.merge(adm_map, my_cc.drop("centroid", axis=1), on=["country", "adm1", "adm2"])

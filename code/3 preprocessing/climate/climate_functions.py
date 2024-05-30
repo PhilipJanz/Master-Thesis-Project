@@ -3,7 +3,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import xarray as xr
 
-from config import SOURCE_DATA_DIR, POCESSED_DATA_DIR
+from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR
 
 """
 This script is a small cosy libray to load and allocate the climate data provided by PIK with following structure;
@@ -13,8 +13,27 @@ Inside there are files where each contains maps of one feature for all possible 
 Data-dimensions: {'time': 42, 'bnds': 2, 'longitude': 15, 'latitude': 35}
 """
 
-file_path = SOURCE_DATA_DIR / "climate/CHIRPS/MWI/CHIRPS-0.05_Malawi_MWI_12_21_12_30/pr_sum_CHIRPS-0.05_historical_1981-2022_MWI_12_21_12_30_Malawi.nc"
-file_path = SOURCE_DATA_DIR / "climate/ERA5/MWI/ERA5_Malawi_MWI_12_21_12_30/tas_mean_ERA5_historical_1981-2022_MWI_12_21_12_30_Malawi.nc"
+file_path = SOURCE_DATA_DIR / "climate/CHIRPS/KEN/CHIRPS-0.05_Kenya_KEN_01_01_01_10/pr_sum_CHIRPS-0.05_historical_1981-2022_KEN_01_01_01_10_Kenya.nc"
+file_path = SOURCE_DATA_DIR / "climate/ERA5/KEN/ERA5_Kenya_KEN_01_01_01_10/tas_mean_ERA5_historical_1981-2022_KEN_01_01_01_10_Kenya.nc"
+
+
+def load_one_file(file_path, get_transform=True):
+    data = xr.open_dataset(file_path)
+    if get_transform:
+        # Enable the rio accessor
+        data = data.rio.write_crs("EPSG:4326")
+        # ERA5 data have an offset in the coordinate points (the are the edge of the pixel instead of the center)
+        if "ERA5" in str(file_path):
+            data = data.assign_coords(longitude=data.longitude.values + 0.125)
+            data = data.assign_coords(latitude=data.latitude.values - 0.125)
+        # check of flipped axis:
+        if data.latitude.values[0] > data.latitude.values[-1]:
+            data = data.sel(latitude=slice(None, None, -1))
+        # Get the affine transform
+        transform = data.rio.transform()
+        return data, transform
+    else:
+        return data
 
 
 def make_dekadal_data_matrix(adm_df, first_year, last_year):
@@ -33,18 +52,6 @@ def make_dekadal_data_matrix(adm_df, first_year, last_year):
     data_matrix = pd.concat([data_matrix, new_columns_df], axis=1)
 
     return data_matrix
-
-
-def load_one_file(file_path, get_transform=True):
-    data = xr.open_dataset(file_path)
-    if get_transform:
-        # Enable the rio accessor
-        data = data.rio.write_crs("EPSG:4326")
-        # Get the affine transform
-        transform = data.rio.transform()
-        return data, transform
-    else:
-        return data
 
 
 def calculate_geo_boundaries(dims, transform, round):
@@ -81,4 +88,4 @@ def calculate_weighted_average_on_xarray_images(images, mask):
 def save_data_matrices(data_matrix_dict):
     features = data_matrix_dict.keys()
     for feature in features:
-        data_matrix_dict[feature].to_csv(POCESSED_DATA_DIR / f"climate/{feature}_regional_matrix.csv", index=False)
+        data_matrix_dict[feature].to_csv(PROCESSED_DATA_DIR / f"climate/{feature}_regional_matrix.csv", index=False)
