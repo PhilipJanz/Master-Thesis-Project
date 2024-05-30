@@ -3,7 +3,7 @@ import pandas as pd
 
 from config import PROCESSED_DATA_DIR
 from cluster_functions import calculate_yield_correlations, kmean_elbow, kmean_cluster, make_profiles, \
-    plot_cluster_profiles, plot_cluster_map, cluster_validation_plot
+    plot_cluster_profiles, plot_cluster_map, cluster_validation_plot, save_cluster_data
 from maps.map_functions import load_aoi_map
 from yield_.yield_functions import load_yield_data
 
@@ -59,6 +59,10 @@ k = 7
 labels, _ = kmean_cluster(data_mtx=season_preci_profile_mtx, n_clusters=k)
 cc_df["preci_cluster"] = labels
 
+
+# Visualize #####
+
+# NDVI
 plot_cluster_profiles(cluster_data=cc_df,
                       cluster_column="ndvi_cluster",
                       profile_data=season_ndvi_profile_mtx,
@@ -67,6 +71,7 @@ plot_cluster_map(cluster_data=cc_df,
                  cluster_column="ndvi_cluster",
                  cluster_name="NDVI")
 
+# NDVI first derivative
 plot_cluster_profiles(cluster_data=cc_df,
                       cluster_column="diff_ndvi_cluster",
                       profile_data=season_diff_ndvi_profile_mtx,
@@ -75,6 +80,7 @@ plot_cluster_map(cluster_data=cc_df,
                  cluster_column="diff_ndvi_cluster",
                  cluster_name="Diff-NDVI")
 
+# Precipitation
 plot_cluster_profiles(cluster_data=cc_df,
                       cluster_column="preci_cluster",
                       profile_data=season_preci_profile_mtx,
@@ -82,6 +88,9 @@ plot_cluster_profiles(cluster_data=cc_df,
 plot_cluster_map(cluster_data=cc_df,
                  cluster_column="preci_cluster",
                  cluster_name="Precipitation")
+
+# save
+save_cluster_data(cluster_df=cc_df.drop(columns=['sos_s', 'sos_e', 'eos_s', 'eos_e', 'growth_time', 'sos_avg']))
 
 # Validation ######
 # for validation we look at the yield distribution (overall and within-cluster)
@@ -92,9 +101,10 @@ yield_df = load_yield_data()
 # generate yield correlation matrix
 correlation_matrix = calculate_yield_correlations(yield_df)
 
-# Visualize ######
+# fusion datasets
 clustered_yield_df = pd.merge(yield_df, cc_df, how="left", on=["country", "adm1", "adm2"])
 
+# make cluster validation plot for selected clusters
 cluster_validation_plot(clustered_yield_df=clustered_yield_df,
                         correlation_matrix=correlation_matrix,
                         cluster_columns=["ndvi_cluster", "diff_ndvi_cluster"],

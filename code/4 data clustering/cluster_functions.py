@@ -330,3 +330,9 @@ def cluster_validation_plot(clustered_yield_df, correlation_matrix, cluster_colu
     plt.show()
 
 
+def save_cluster_data(cluster_df):
+    cluster_df.to_csv(PROCESSED_DATA_DIR / f"data clustering/cluster_data.csv", index=False)
+
+
+def load_cluster_data():
+    return pd.read_csv(PROCESSED_DATA_DIR / f"data clustering/cluster_data.csv")
