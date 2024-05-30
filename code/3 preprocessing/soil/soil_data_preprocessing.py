@@ -8,7 +8,7 @@ from crop_mask.crop_mask_functions import load_geoglam_crop_mask
 from soil.soil_functions import load_soil_data
 
 # load administrative boundaries with geographic information
-adm_map = gpd.read_file(POCESSED_DATA_DIR / "admin map/comb_map.shp")
+adm_map = gpd.read_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp")
 
 # load crop mask (cropped on AOI). Make sure the geographic boundaries fit your soil-data
 crop_mask, target_transform, target_crs = load_geoglam_crop_mask(lon_min=22, lon_max=48, lat_min=-18, lat_max=15)
@@ -53,7 +53,7 @@ for ix, row in adm_map.iterrows():
 assert not np.any(adm_map.isna()), "A nan values was found. That should not occur. Check it out."
 
 #### SAVE #####
-adm_map.drop("geometry", axis=1).to_csv(POCESSED_DATA_DIR / "soil/soil_property_region_level.csv", index=False)
+adm_map.drop("geometry", axis=1).to_csv(PROCESSED_DATA_DIR / "soil/soil_property_region_level.csv", index=False)
 
 #### PLOT #####
 # List of column names you want to plot
@@ -73,19 +73,19 @@ for ax, column, title in zip(axs.flatten(), columns_to_plot, titles):
     ax.set_axis_off()
     ax.set_title(title)
 plt.tight_layout()
-plt.savefig(POCESSED_DATA_DIR / "soil/plots/soil_property_region_level.jpg", dpi=600)
+plt.savefig(PROCESSED_DATA_DIR / "soil/plots/soil_property_region_level.jpg", dpi=600)
 #plt.show()
 
 # plot cropland area
 fig, ax = plt.subplots(figsize=(8, 8))
 adm_map.plot(column='est_cropland_area', cmap="YlGn", legend=True, ax=ax)
 plt.title("Estimated maize cropland area (ha)")
-plt.savefig(POCESSED_DATA_DIR / "soil/plots/estimated_cropland_area.jpg", dpi=600)
+plt.savefig(PROCESSED_DATA_DIR / "soil/plots/estimated_cropland_area.jpg", dpi=600)
 plt.show()
 
 # plot results
 fig, ax = plt.subplots(figsize=(8, 8))
 adm_map.plot(column='elevation', cmap="RdYlGn_r", legend=True, ax=ax)
 plt.title("Average elevation of cropland area")
-plt.savefig(POCESSED_DATA_DIR / "soil/plots/elevation.jpg", dpi=600)
+plt.savefig(PROCESSED_DATA_DIR / "soil/plots/elevation.jpg", dpi=600)
 plt.show()

@@ -7,7 +7,7 @@ import rasterio
 import geopandas as gpd
 
 from climate.climate_functions import *
-from config import SOURCE_DATA_DIR, POCESSED_DATA_DIR
+from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR
 from crop_mask.crop_mask_functions import load_geoglam_crop_mask
 
 """
@@ -16,7 +16,7 @@ We are processing selected features for each region of interest and apply the GE
 """
 
 # load administrative boundaries (AOI) with geographic information
-adm_map = gpd.read_file(POCESSED_DATA_DIR / "admin map/comb_map.shp")
+adm_map = gpd.read_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp")
 
 # path to precipitation data
 data_path = SOURCE_DATA_DIR / "climate/CHIRPS"

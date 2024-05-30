@@ -7,7 +7,7 @@ import rasterio
 import geopandas as gpd
 
 from climate.climate_functions import *
-from config import SOURCE_DATA_DIR, POCESSED_DATA_DIR
+from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR
 from crop_mask.crop_mask_functions import load_geoglam_crop_mask
 
 
@@ -17,7 +17,7 @@ We are processing selected features for each region of interest and apply the GE
 """
 
 # load administrative boundaries (AOI) with geographic information
-adm_map = gpd.read_file(POCESSED_DATA_DIR / "admin map/comb_map.shp")
+adm_map = gpd.read_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp")
 
 # path to temperature data
 data_path = SOURCE_DATA_DIR / "climate/ERA5"
@@ -68,7 +68,11 @@ for country_code in country_codes:
             lon_min, lon_max, lat_min, lat_max = calculate_geo_boundaries(dims=dims, transform=target_transform, round=4)
 
             # load crop mask (cropped on country ).
-            crop_mask, target_transform_, _ = load_geoglam_crop_mask(lon_min=lon_min, lon_max=lon_max, lat_min=lat_min, lat_max=lat_max)
+            crop_mask, target_transform_, _ = load_geoglam_crop_mask(lon_min=lon_min,
+                                                                     lon_max=lon_max,
+                                                                     lat_min=lat_min,
+                                                                     lat_max=lat_max,
+                                                                     resolution=0.25)
 
             # iterate over regions and generate average feature values for each year
             for ix, row in adm_map[adm_map.country == country].iterrows():
@@ -76,7 +80,7 @@ for country_code in country_codes:
                 region_mask = rasterio.features.rasterize(
                     [row.geometry],
                     out_shape=crop_mask.shape,
-                    transform=target_transform,
+                    transform=target_transform_,
                     fill=0,  # Areas outside the polygons will be filled with 0
                     dtype=np.uint8,
                     all_touched=True  # Consider all pixels touched by geometries
