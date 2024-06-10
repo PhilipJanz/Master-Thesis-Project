@@ -9,7 +9,8 @@ from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 import seaborn as sns
 
-
+from crop_calendar.crop_calendar_functions import detect_seasons
+from crop_calendar.profile_generation import make_profiles
 from maps.map_functions import load_africa_map, load_aoi_map
 
 OMP_NUM_THREADS = 1
@@ -82,63 +83,64 @@ def get_day_of_year(date_str):
     return day_of_year
 
 
-def make_profiles(cc_df, ndvi_df, preci_df, profile_length, plot):
+def make_cc(comparison_cc_df, ndvi_df, preci_df, profile_length, plot):
     # detect value columns in dataframes and save day of year for fitting later
     ndvi_value_columns = [column for column in ndvi_df.columns if column[:4].isdigit()]
     ndvi_day_of_year = [get_day_of_year(date) for date in ndvi_value_columns]
     preci_value_columns = [column for column in preci_df.columns if column[:4].isdigit()]
     preci_day_of_year = [get_day_of_year(date) for date in preci_value_columns]
 
-    # calculate start of season
-    cc_df["sos_avg"] = cc_df.sos_s + (cc_df.sos_e - cc_df.sos_s)
+    # generate profile matrix (average over years)
+    ndvi_profile_mtx = make_profiles(ndvi_df)
+    preci_profile_mtx = make_profiles(preci_df)
 
-    # profile matrix to be filled:
-    ndvi_profile_mtx = []
-    preci_profile_mtx = []
-
-    for i, row in cc_df.iterrows():
+    for i, (ndvi_profile, preci_profile) in enumerate(zip(ndvi_profile_mtx, preci_profile_mtx)):
         # extract CC name and region
-        cc_name = str(row.values[:4]).replace('"', '').replace("'None' ", "").replace("/", "-")
-        print(cc_name)
-        # day of the year when the season starts
-        start_of_season_doy = int((row.sos_avg - 1) * 10 + 1)
+        region_cc = comparison_cc_df[np.all(comparison_cc_df.iloc[:, :3].isin(ndvi_df.values[i, :3]), 1)]
+        region_name = str(ndvi_df.values[i, :3]).replace('"', '').replace("'None' ", "").replace("/", "-")
+        print(region_name)
 
         # extract values
-        ndvi_values = ndvi_df.loc[np.all(ndvi_df.iloc[:, :3].isin(row.values[:3]), 1), ndvi_value_columns].values[0]
-        preci_values = preci_df.loc[np.all(preci_df.iloc[:, :3].isin(row.values[:3]), 1), preci_value_columns].values[0].astype(dtype="float")
+        ndvi_values = ndvi_df[ndvi_value_columns].values[i]
+        preci_values = preci_df[preci_value_columns].values[i].astype(dtype="float")
 
-        # fit the data by a fourier series
-        days, fourier_fitted_ndvi_values = fit_fourier_series(days=ndvi_day_of_year, values=ndvi_values, N=5)
-        days, fourier_fitted_preci_values = fit_fourier_series(days=preci_day_of_year, values=preci_values, N=5)
+        # estimate sos, eos
+        sos, eos = detect_seasons(ndvi_profile)
 
         if plot:
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6))
             ax1.scatter(preci_day_of_year, preci_values, alpha=0.4)
-            ax1.plot(days, fourier_fitted_preci_values, linewidth=3, color="tab:orange", label="Fourier approximation (N=5)")
-            ax1.vlines(x=start_of_season_doy, ymin=min(preci_values), ymax=max(preci_values),
-                       linestyles="dashed",
-                       color="tab:red",
-                       label="Start of season")
+            ax1.plot(np.arange(1, 366), preci_profile, linewidth=3, color="tab:orange", label="Fourier approximation (N=5)")
             ax1.set_ylabel("Precipitation (mm)")
             ax1.legend()
+
             ax2.scatter(ndvi_day_of_year, ndvi_values, color="tab:green", alpha=0.4)
-            ax2.plot(days, fourier_fitted_ndvi_values, linewidth=3, color="tab:orange", label="Fourier approximation (N=5)")
-            ax2.vlines(x=start_of_season_doy, ymin=min(ndvi_values), ymax=max(ndvi_values),
-                       linestyles="dashed",
+            ax2.plot(np.arange(1, 366), ndvi_profile, linewidth=3, color="tab:orange", label="Fourier approximation (N=5)")
+            ax2.vlines(x=[sos, eos], ymin=min(ndvi_values), ymax=max(ndvi_values),
+                       linestyles="dotted",
                        color="tab:red",
-                       label="Start of season")
+                       label="My CC")
+            for i, row in region_cc.iterrows():
+                asap_sos = int((row.sos_s - 1) * 10 + 1)
+                asap_eos = int((row.eos_e - 1) * 10 + 1)
+                ax2.vlines(x=[asap_sos, asap_eos], ymin=min(ndvi_values), ymax=max(ndvi_values),
+                           linestyles="dashed",
+                           #color="tab:red",
+                           label=f"{row.season} (ASAP)")
             ax2.set_ylabel("NDVI")
             ax2.set_xlabel("Day of the year")
             ax2.legend()
-            fig.suptitle(f"NDVI & precipitation profile: {cc_name}")
-            plt.savefig(PROCESSED_DATA_DIR / f"data clustering/plots/profiles/profile_{cc_name}",
+            fig.suptitle(f"NDVI & precipitation profile: {region_name}")
+            plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/profiles/profile_{region_name}",
                         dpi=300)
             plt.close(fig)
 
         # rearrange data to make profile and append to data matrix
-        ndvi_profile = np.append(fourier_fitted_ndvi_values, fourier_fitted_ndvi_values)[(start_of_season_doy - 1):][:profile_length]
+        if sos > eos:
+            eos += 365
+        ndvi_profile = np.append(ndvi_profile, ndvi_profile)[sos:eos][:profile_length]
         ndvi_profile_mtx.append(ndvi_profile)
-        preci_profile = np.append(fourier_fitted_preci_values, fourier_fitted_preci_values)[(start_of_season_doy - 1):][:profile_length]
+        preci_profile = np.append(preci_profile, preci_profile)[sos:eos][:profile_length]
         preci_profile_mtx.append(preci_profile)
     return np.array(ndvi_profile_mtx), np.array(preci_profile_mtx)
 

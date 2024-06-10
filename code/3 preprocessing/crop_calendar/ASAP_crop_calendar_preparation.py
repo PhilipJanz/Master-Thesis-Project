@@ -10,7 +10,6 @@ This script reads crop calendars (CC) from different sources to merge, clean and
 """
 
 
-
 # load  administrative boundaries with geographic information
 adm_map = gpd.read_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp")
 adm_map['centroid'] = adm_map.representative_point()

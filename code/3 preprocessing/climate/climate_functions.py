@@ -13,9 +13,6 @@ Inside there are files where each contains maps of one feature for all possible 
 Data-dimensions: {'time': 42, 'bnds': 2, 'longitude': 15, 'latitude': 35}
 """
 
-file_path = SOURCE_DATA_DIR / "climate/CHIRPS/KEN/CHIRPS-0.05_Kenya_KEN_01_01_01_10/pr_sum_CHIRPS-0.05_historical_1981-2022_KEN_01_01_01_10_Kenya.nc"
-file_path = SOURCE_DATA_DIR / "climate/ERA5/KEN/ERA5_Kenya_KEN_01_01_01_10/tas_mean_ERA5_historical_1981-2022_KEN_01_01_01_10_Kenya.nc"
-
 
 def load_one_file(file_path, get_transform=True):
     data = xr.open_dataset(file_path)
