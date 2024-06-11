@@ -16,7 +16,7 @@ def load_africa_map():
 
 
 def load_aoi_map():
-    return gpd.read_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp")
+    return gpd.read_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp", keep_default_na=False)
 
 
 def load_grid_data(path, lon_min=None, lat_max=None, lon_max=None, lat_min=None):

@@ -25,7 +25,7 @@ def make_profiles(data_df):
 
         profile_mtx.append(fourier_fitted_values)
 
-    return profile_mtx
+    return np.array(profile_mtx)
 
 
 def get_day_of_year(date_str):

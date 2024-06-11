@@ -9,6 +9,7 @@ from scipy.signal import find_peaks
 
 from config import PROCESSED_DATA_DIR
 from crop_calendar.profile_generation import make_profiles
+from maps.map_functions import load_africa_map
 
 
 def detect_one_season(ndvi_profile):
@@ -40,8 +41,8 @@ def detect_seasons(ndvi_profile):
         amplitude = max_ndvi - min_ndvi
 
         # Define thresholds for the start and end of the season
-        start_threshold = min_ndvi + 0.1 * amplitude
-        end_threshold = max_ndvi - 0.7 * amplitude
+        start_threshold = min_ndvi + 0.25 * amplitude
+        end_threshold = max_ndvi - 0.75 * amplitude
 
         # find sos & eos
         sos = find_sos(ndvi_profile, start_threshold)
@@ -80,7 +81,7 @@ def copy_cc(cc_df, column, from_name, to_name):
     return pd.concat([cc_df[cc_df[column] != to_name], copy_df])
 
 
-def plot_seasonal_crop_calendar(plot_cc_df, column, file_name=None):
+def plot_asap_crop_calendar(plot_cc_df, column, file_name=None):
     # rescaling target column to guarantee meaningful and intuitive colorspace
     min_value = min(plot_cc_df[column])
     plot_cc_df[column] = ((plot_cc_df[column] - min_value) % 36) # makes sure that 0 is the min value
@@ -114,11 +115,84 @@ def plot_seasonal_crop_calendar(plot_cc_df, column, file_name=None):
     cbar.set_ticklabels(ticklabels[(ticks > 0) & (ticks <= np.max(vmax))])
     # Save plot if wanted
     if file_name:
-        plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/{file_name}.jpg", dpi=600)
+        plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/ASAP/{file_name}.jpg", dpi=600)
     plt.show()
 
 
-def plot_growth_time(plot_cc_df):
+def plot_my_crop_calendar(cc_df):
+    # load country-based map for better understanding for country borders
+    africa_map = load_africa_map()
+
+    # start plotting
+    fig, ax = plt.subplots(1, 2, figsize=(10, 6))
+    ax1, ax2 = ax
+    # Determine the common color scale across all data
+    vmin = np.min(cc_df[["sos", "eos"]].values)
+    vmax = np.max(cc_df[["sos", "eos"]].values)
+    # Create a custom cyclic colormap
+    #colors = ['#1f77b4', '#2ca02c', '#d68627', '#1f77b4']  # Blue, Green, Brown, Blue
+    #n_bins = 100  # Discretizes the interpolation into bins
+    #cmap_name = 'custom_seasons'
+    #cmap = mcolors.LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins)
+    cmap = "viridis"
+
+    # Plot country maps as background
+    africa_map[africa_map.NAME.isin(cc_df.country.unique())].plot(color="#e6e6e6", edgecolor="white", linewidth=2, ax=ax1)
+    africa_map[africa_map.NAME.isin(cc_df.country.unique())].plot(color="#e6e6e6", edgecolor="white", linewidth=2, ax=ax2)
+
+    # plot sos and eos
+    cc_df.plot(column="sos", cmap=cmap, edgecolor='white', linewidth=0.2, ax=ax1, vmin=vmin, vmax=vmax)
+    cc_df.plot(column="eos", cmap=cmap, edgecolor='white', linewidth=0.2, ax=ax2, vmin=vmin, vmax=vmax)
+
+    # Adding titles to each subplot
+    ax1.set_title("Start of the season")
+    ax2.set_title("End of the season")
+
+    # Create a colorbar
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=mcolors.Normalize(vmin=vmin, vmax=vmax))
+    sm.set_array([])
+    # Creating a colorbar with custom ticks and labels
+    cbar = fig.colorbar(sm, ax=ax,  fraction=0.02, pad=0.04)
+    # make custom ticks
+    ticks = np.array([1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335])
+    ticklabels = np.array(["January", "February", "March", "April", "May", 'June', 'July', 'August', "September", "October", "November", "December"])
+    cbar.set_ticks(ticks[(ticks >= vmin) & (ticks <= vmax)])
+    cbar.set_ticklabels(ticklabels[(ticks >= vmin) & (ticks <= vmax)])
+    # Save plot if wanted
+    plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/MY/my_cc_sos_eos.jpg", dpi=1500)
+    plt.show()
+
+
+def plot_season_length(cc_df):
+    # start plotting
+    fig, ax = plt.subplots(figsize=(8, 6))
+    # Determine the common color scale across all data
+    vmin = min(cc_df["season_length"])
+    vmax = max(cc_df["season_length"])
+
+    # Create a custom cyclic colormap
+    #colors = ['#1f77b4', '#2ca02c', '#d68627', '#1f77b4']  # Blue, Green, Brown, Blue
+    #n_bins = 100  # Discretizes the interpolation into bins
+    #cmap_name = 'custom_seasons'
+    #cmap = mcolors.LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins)
+    cmap="viridis"
+
+    cc_df.plot(column="season_length", cmap=cmap, ax=ax, vmin=vmin, vmax=vmax)
+    # Adding titles to each subplot
+    ax.set_title("Length of the season")
+    # Create a colorbar
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=mcolors.Normalize(vmin=vmin, vmax=vmax))
+    sm.set_array([])
+
+    # Creating a colorbar with custom ticks and labels
+    cbar = fig.colorbar(sm, ax=ax,  fraction=0.02, pad=0.04)
+
+    # Save plot if wanted
+    plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/MY/my_cc_season_length.jpg", dpi=900)
+    plt.show()
+
+
+def plot_asap_growth_time(plot_cc_df):
     column = "growth_time"
     assert column in plot_cc_df.columns
     # Data filtering based on seasons
@@ -304,3 +378,7 @@ def fit_polynomial(days, values, degree):
     fitted_values = poly(days)
 
     return days, fitted_values
+
+
+def load_my_cc():
+    return pd.read_csv(PROCESSED_DATA_DIR / f"crop calendar/my_crop_calendar.csv", keep_default_na=False)

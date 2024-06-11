@@ -224,22 +224,21 @@ def plot_cluster_map(cluster_data, cluster_column, cluster_name):
 
     # Define a colormap
     cmap = plt.get_cmap('tab10')  # 'tab20' has 20 distinct colors
-    colors = [cmap(i) for i in np.linspace(0, 1, geo_cluster_data[cluster_column].nunique())]
 
     # start plotting
     fig, ax = plt.subplots(figsize=(10, 12))
 
     # Plot country maps as background
-    africa_map[africa_map.NAME.isin(geo_cluster_data.country.unique())].plot(color="grey", edgecolor="darkgrey", linewidth=0.3, ax=ax, alpha=0.2)
+    africa_map[africa_map.NAME.isin(geo_cluster_data.country.unique())].plot(color="#e6e6e6", edgecolor="white", linewidth=2, ax=ax)
 
     # Create a list for legend entries
     legend_elements = []
 
     # Plot clusters one by one with distinct colors
-    for color, (cluster, single_cluster_data) in zip(colors, geo_cluster_data.groupby(cluster_column)):
-        single_cluster_data.plot(color=color, edgecolor='white', linewidth=0.3, ax=ax, alpha=0.8)
+    for i, (cluster, single_cluster_data) in enumerate(geo_cluster_data.groupby(cluster_column)):
+        single_cluster_data.plot(color=cmap(i), edgecolor='white', linewidth=0.3, ax=ax, alpha=0.8)
         # Add a legend entry
-        legend_elements.append(Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=10, label=cluster))
+        legend_elements.append(Line2D([0], [0], marker='o', color='w', markerfacecolor=cmap(i), markersize=10, label=cluster))
 
     # Create the legend manually
     ax.legend(handles=legend_elements, loc="upper left", title=cluster_column)
