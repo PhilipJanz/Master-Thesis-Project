@@ -1,8 +1,33 @@
+import numpy as np
 import rasterio
 import rasterio.features
 from rasterio.enums import Resampling
 
 from config import *
+
+
+
+def weighted_avg_over_crop_mask(crop_mask, data_image, instance_name, region_name, warn_spread_above):
+    # again filter crop mask for nan values in the cc data to respect them in the weighted average
+    upd_crop_mask = np.where(np.isnan(data_image), np.nan, crop_mask)
+
+    # check if we have pixels left:
+    if np.nansum(upd_crop_mask) == 0:
+        return np.nan
+
+    # normalize the crop mask to make it easy to calculate a weighted average based on percentage cropland per pixel
+    normalized_crop_mask = upd_crop_mask / np.nansum(upd_crop_mask)
+
+    # calc average
+    weighted_avg = np.nansum(normalized_crop_mask * data_image)
+
+    # check for big spread inside one region
+    quantiles = np.nanquantile(np.where(upd_crop_mask > 0, data_image, np.nan), q=[0.025, 0.975])
+    if quantiles[1] - quantiles[0] > warn_spread_above:
+        print(f'Detected strong divergence in {instance_name} inside region {region_name}. Quant.: {np.round(quantiles, 2)}, weighted avg: ({np.round(weighted_avg, 2)})')
+
+    return weighted_avg
+
 
 def load_geoglam_crop_mask(lon_min=None, lat_max=None, lon_max=None, lat_min=None, resolution=None):
     """

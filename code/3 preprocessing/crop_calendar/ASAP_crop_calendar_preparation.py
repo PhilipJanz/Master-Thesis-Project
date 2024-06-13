@@ -3,12 +3,11 @@ import pandas as pd
 import geopandas as gpd
 
 from config import *
-from crop_calendar.crop_calendar_functions import copy_cc, plot_seasonal_crop_calendar, plot_growth_time
+from crop_calendar.crop_calendar_functions import copy_cc, plot_asap_crop_calendar, plot_asap_growth_time
 
 """
 This script reads crop calendars (CC) from different sources to merge, clean and plots them. 
 """
-
 
 
 # load  administrative boundaries with geographic information
@@ -108,6 +107,6 @@ my_cc.drop("centroid", axis=1).to_csv(PROCESSED_DATA_DIR / "crop calendar/proces
 # plot
 plot_cc_df = pd.merge(adm_map, my_cc.drop("centroid", axis=1), on=["country", "adm1", "adm2"])
 
-plot_seasonal_crop_calendar(plot_cc_df=plot_cc_df.copy(), column="sos_s", file_name="start_of_season")
-plot_seasonal_crop_calendar(plot_cc_df=plot_cc_df.copy(), column="eos_e", file_name="end_of_season")
-plot_growth_time(plot_cc_df)
+plot_asap_crop_calendar(plot_cc_df=plot_cc_df.copy(), column="sos_s", file_name="start_of_season")
+plot_asap_crop_calendar(plot_cc_df=plot_cc_df.copy(), column="eos_e", file_name="end_of_season")
+plot_asap_growth_time(plot_cc_df)

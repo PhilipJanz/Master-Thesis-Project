@@ -3,7 +3,8 @@ import rasterio
 import geopandas as gpd
 
 from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR
-from crop_mask.crop_mask_functions import load_geoglam_crop_mask
+from crop_mask.crop_mask_functions import load_geoglam_crop_mask, weighted_avg_over_crop_mask
+from maps.map_functions import load_aoi_map, load_grid_data
 from remote_sensing.rs_functions import load_rs_data, custom_rolling_average
 
 """
@@ -14,10 +15,13 @@ we also appie an interpolation and smoother to generate smooth data without miss
 """
 
 # load administrative boundaries (AOI) with geographic information
-adm_map = gpd.read_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp")
+adm_map = load_aoi_map()
 
-# load crop mask (cropped on AOI). Make sure the geographic boundaries fit your soil-data
-crop_mask, target_transform, target_crs = load_geoglam_crop_mask(lon_min=22, lon_max=48, lat_min=-18, lat_max=15)
+# load crop mask (cropped on AOI).
+crop_mask, target_transform, target_crs = load_grid_data(path=SOURCE_DATA_DIR / "crop mask/GEOGLAM_Percent_Maize.tif",
+                                                         lon_min=22, lon_max=48, lat_min=-18, lat_max=15)
+# filter crop mask (10 ~ 0.1%)
+crop_mask = np.where(crop_mask < 10, np.nan, crop_mask)
 
 # path to MODIS remote sensing data
 rs_path = SOURCE_DATA_DIR / "remote sensing/MODIS"
@@ -54,18 +58,16 @@ for ix, row in adm_map.iterrows():
 
     # iterate over dates and calculate the (weighted) average of NDVI and EVI for this region
     for evi_image, ndvi_image, date in zip(evi_image_list, ndvi_image_list, ndvi_date_list):
-        # filter again the regional crop mask based on the nan-values in the vi-images representing 'bad'-quality pixel
-        # the use of EVI or NDVI should be similar for this step
-        no_cloud_regional_crop_mask = np.where(~np.isnan(evi_image), regional_crop_mask, np.nan)
-        # check if there is data let. If not return nans
-        if np.nansum(no_cloud_regional_crop_mask) == 0:
-            ndvi_data.loc[ix, date] = np.nan
-            evi_data.loc[ix, date] = np.nan
-        else:
-            # normalize the crop mask to make it easy to calculate a weighted average based on percentage cropland per pixel
-            no_cloud_regional_crop_mask = no_cloud_regional_crop_mask / np.nansum(no_cloud_regional_crop_mask)
-            ndvi_data.loc[ix, date] = np.nansum(no_cloud_regional_crop_mask * ndvi_image)
-            evi_data.loc[ix, date] = np.nansum(no_cloud_regional_crop_mask * evi_image)
+        ndvi_data.loc[ix, date] = weighted_avg_over_crop_mask(crop_mask=regional_crop_mask,
+                                                              data_image=ndvi_image,
+                                                              instance_name="NDVI",
+                                                              region_name=str(adm_map.loc[ix, ["country", "adm1", "adm2"]].values).replace("'None' ", ""),
+                                                              warn_spread_above=0.1)
+        ndvi_data.loc[ix, date] = weighted_avg_over_crop_mask(crop_mask=regional_crop_mask,
+                                                              data_image=evi_image,
+                                                              instance_name="EVI",
+                                                              region_name=str(adm_map.loc[ix, ["country", "adm1", "adm2"]].values).replace("'None' ", ""),
+                                                              warn_spread_above=0.1)
 
 
 ### SMOOTHING ###
