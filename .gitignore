@@ -1,10 +1,15 @@
 data/raw_source/*
 data/processed/*
+data/*
 literature/*
 orga/*
+.idea/*
 
 __pycache__
 
 .ipynb_checkpoints
 
 ideas
+
+
+
