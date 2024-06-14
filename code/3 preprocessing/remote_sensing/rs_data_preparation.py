@@ -3,7 +3,7 @@ import rasterio
 import geopandas as gpd
 
 from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR
-from crop_mask.crop_mask_functions import load_geoglam_crop_mask, weighted_avg_over_crop_mask
+from crop_mask.crop_mask_functions import weighted_avg_over_crop_mask
 from maps.map_functions import load_aoi_map, load_grid_data
 from remote_sensing.rs_functions import load_rs_data, custom_rolling_average
 
