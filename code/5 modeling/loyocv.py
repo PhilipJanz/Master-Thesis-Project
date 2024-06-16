@@ -6,6 +6,7 @@ import pickle
 from copy import deepcopy
 import matplotlib.pyplot as plt
 from datetime import datetime
+import time
 
 # preprocessing
 from sklearn.preprocessing import StandardScaler
@@ -17,53 +18,24 @@ from sklearn.svm import SVR
 #import tensorflow as tf
 
 # parallelization
-#from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # code makeup
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 
+from training import train_and_predict
+
 # Ignore ConvergenceWarning
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
 
-def train_and_predict(X_train, y_train, X_test, y_test, model, epochs=None, learning_rate=None, batch_size=None):
-    """
-    Train the model and predict the test set.
-    This function is designed to run in parallel for each cross-validation fold.
-    """
-    if epochs: # Keras NN
-        my_model = tf.keras.models.clone_model(model)
-        my_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate), loss=tf.keras.losses.MeanSquaredError())
-        history = my_model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)#, validation_data=(X_test, y_test))
-        """loss = history.history["loss"]
-        val_loss = history.history["val_loss"]
-        plt.figure(figsize=(10, 6))
-        plt.plot(loss, 'bo-', label='Training loss', alpha=0.7)
-        plt.plot(val_loss, 'ro-', label='Validation loss', alpha=0.7)
-        plt.hlines(xmin=0, xmax=len(loss), y=min(val_loss), color="darkgrey", label=f"Minimum val loss: {round(min(val_loss), 3)}, ({np.argmin(val_loss)}); Final val-loss: {round(val_loss[-1], 3)}")
-        plt.title(f'Training and Validation Loss')
-        plt.xlabel('Epochs')
-        plt.ylabel('Loss')
-        plt.ylim([0.03, 5])  # Be cautious with log scale: 0 cannot be shown on a log scale
-        plt.yscale('log')
-        plt.legend()
-        plt.show()"""
-        y_pred = my_model.predict(X_test,verbose=0).T[0]
-    else: # Sklearn
-        my_model = deepcopy(model)
-        my_model.fit(X_train, y_train)
-        y_pred = my_model.predict(X_test)
-    mse = np.mean((y_test - y_pred) ** 2)
-    return y_pred, mse
-
-
-def loyocv(X, y, years, model, model_name, epochs=None, batch_size=None, learning_rate=None, print_result=False):
+def loyocv(X, y, years, model, model_name, print_result=False):
     """
     model: initialized model with .fit and .predict
     """
     # check if years are sorted. If not the functions output y_preds would not align with the input array 'y'
-    assert all(np.sort(years) == years), "Sort by year in your data preprocessing!"
+    assert np.all(np.sort(years) == years), "Sort by year in your data preprocessing!"
     # initialize arrays to be filled
     scores = []
     y_preds = np.repeat(np.nan, len(y))
@@ -72,18 +44,14 @@ def loyocv(X, y, years, model, model_name, epochs=None, batch_size=None, learnin
         year_0_bool = (years != year_0)
         X_train = X[year_0_bool]
         y_train = y[year_0_bool]
-        X_test = X[np.invert(year_0_bool)]
-        y_test = y[np.invert(year_0_bool)]
+        X_test = X[~year_0_bool]
+        y_test = y[~year_0_bool]
 
-        y_pred, mse = train_and_predict(X_train, y_train, X_test, y_test,
-                                        model=model,
-                                        epochs=epochs,
-                                        batch_size=batch_size,
-                                        learning_rate=learning_rate)
+        y_pred, mse = train_and_predict(X_train, y_train, X_test, y_test, model=model)
 
         # save the score & best hyperparameter
         scores.append(mse)
-        y_preds[np.invert(year_0_bool)] = y_pred
+        y_preds[~year_0_bool] = y_pred
 
     model_mse = np.mean(scores)
     if print_result:
@@ -96,7 +64,7 @@ def loyocv_parallel(X, y, years, model, model_name, print_result=False):
     model: initialized model with .fit and .predict
     """
     # check if years are sorted. If not the functions output y_preds would not align with the input array 'y'
-    assert all(np.sort(years) ==  years), "Sort by year in your data preprocessing!"
+    assert np.all(np.sort(years) == years), "Sort by year in your data preprocessing!"
     # initialize arrays to be filled
     scores = []
     y_preds = np.repeat(np.nan, len(y))
@@ -113,7 +81,7 @@ def loyocv_parallel(X, y, years, model, model_name, print_result=False):
 
     # Execute tasks in parallel
     with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
-        futures = [executor.submit(train_and_predict, X_train, y_train, X_test, y_test, deepcopy(model)) for X_train, y_train, X_test, y_test in tasks]
+        futures = [executor.submit(train_and_predict, X_train, y_train, X_test, y_test, model) for X_train, y_train, X_test, y_test in tasks]
 
         for future in as_completed(futures):
             y_pred, mse = future.result()
@@ -129,7 +97,7 @@ def loyocv_parallel(X, y, years, model, model_name, print_result=False):
     return y_preds, model_mse
 
 
-def nested_loyocv(X, y, years, model_ls, model_name_ls, epochs=None, batch_size=None, learning_rate=None, print_result=False, parallel=False):
+def nested_loyocv(X, y, years, model_ls, model_name_ls, print_result=False, parallel=False):
     """
     model_ls:  list of initialized models with .fit and .predict.
     """
@@ -154,7 +122,7 @@ def nested_loyocv(X, y, years, model_ls, model_name_ls, epochs=None, batch_size=
             if parallel:
                 _, model_mse = loyocv_parallel(X=X_train, y=y_train, years=years_train, model=model, model_name=model_name, print_result=print_result)
             else:
-                _, model_mse = loyocv(X=X_train, y=y_train, years=years_train, model=model, model_name=model_name, epochs=epochs, batch_size=batch_size, learning_rate=learning_rate, print_result=print_result)
+                _, model_mse = loyocv(X=X_train, y=y_train, years=years_train, model=model, model_name=model_name, print_result=print_result)
             # save the scores
             scores.append(model_mse)
             # the following line is a bit cheating but it is reasonable from my personal experience. When the performance drops with higher hypers: stop process
@@ -164,7 +132,7 @@ def nested_loyocv(X, y, years, model_ls, model_name_ls, epochs=None, batch_size=
         # choose the best performing hyperparameters for testing on the hold out year
         ix_best_model = np.argmin(scores)
 
-        if epochs:  # NN based on keras
+        if hasattr(model_ls[ix_best_model], "epochs"):  # NN based on keras
             best_model = tf.keras.models.clone_model(model_ls[ix_best_model])
             best_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate), loss=tf.keras.losses.MeanSquaredError())
             history = best_model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0, validation_data=(X_test, y_test))

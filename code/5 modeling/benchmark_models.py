@@ -6,7 +6,7 @@ from sklearn.linear_model import LinearRegression
 
 from config import RESULTS_DATA_DIR
 from data_assembly import make_dummies
-from ml_functions import loyocv
+from loyocv import loyocv
 from yield_.yield_functions import load_yield_data
 
 """
