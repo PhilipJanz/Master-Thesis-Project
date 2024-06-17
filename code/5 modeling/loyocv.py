@@ -15,7 +15,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
-#import tensorflow as tf
 
 # parallelization
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -102,7 +101,7 @@ def nested_loyocv(X, y, years, model_ls, model_name_ls, print_result=False, para
     model_ls:  list of initialized models with .fit and .predict.
     """
     # check if years are sorted. If not the functions output y_preds would not align with the input array 'y'
-    assert all(np.sort(years) ==  years), "Sort by year in your data preprocessing!"
+    assert np.all(np.sort(years) == years), "Sort by year in your data preprocessing!"
     # initialize arrays to be filled
     best_model_ls = []
     y_preds = np.repeat(np.nan, len(y))
@@ -145,7 +144,7 @@ def nested_loyocv(X, y, years, model_ls, model_name_ls, print_result=False, para
             plt.title(f'Training and Validation Loss, mode: {model_name_ls[ix_best_model]}')
             plt.xlabel('Epochs')
             plt.ylabel('Loss')
-            plt.ylim([0.03, 5])  # Be cautious with log scale: 0 cannot be shown on a log scale
+            plt.ylim([0.001, 5])  # Be cautious with log scale: 0 cannot be shown on a log scale
             plt.yscale('log')
             plt.legend()
             plt.show()

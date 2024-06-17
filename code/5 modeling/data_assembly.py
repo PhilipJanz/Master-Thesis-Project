@@ -35,12 +35,20 @@ def process_feature_df(yield_df, cc_df, feature_df, length, feature_name, start_
         # rescale the time series to target length
         if length == 1:
             season_values = np.mean(season_values)
+        elif length == "mmm":
+            # max mean min
+            season_values = np.array([np.max(season_values), np.mean(season_values), np.min(season_values)])
         else:
             season_values = rescale_array(season_values, length)
 
         processed_feature_mtx.append(season_values)
 
-    return pd.DataFrame(processed_feature_mtx, columns=[feature_name + "_" + str(i) for i in range(1, length + 1)])
+    if length == 1:
+        return pd.DataFrame(processed_feature_mtx, columns=[feature_name + "_" + "mean"])
+    elif length == "mmm":
+        return pd.DataFrame(processed_feature_mtx, columns=[feature_name + "_" + str(i) for i in ["max", "mean", "min"]])
+    else:
+        return pd.DataFrame(processed_feature_mtx, columns=[feature_name + "_" + str(i) for i in range(1, length + 1)])
 
 
 def make_dummies(yield_df):

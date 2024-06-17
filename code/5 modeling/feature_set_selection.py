@@ -10,7 +10,7 @@ from sklearn.ensemble import RandomForestRegressor
 from config import PROCESSED_DATA_DIR, RESULTS_DATA_DIR
 from crop_calendar.crop_calendar_functions import load_my_cc
 from cv_grid_search import cv_grid_search, loyocv_grid_search
-from cv_parameter import rf_param_grid
+from models import rf_param_grid
 from data_assembly import process_feature_df
 from loyocv import loyocv, loyocv_parallel
 
@@ -41,7 +41,7 @@ feature_name_ls = ["ndvi", "si-ndvi", "evi", "si-evi",
                    "temp-median", "si-temp-median", "min-temp-median", "max-temp-median",
                    "min-temp-belowP01", "max-temp-aboveP99"]  # ,
 # length of feature timeseries per season
-length = 1
+length = "mmm"
 
 processed_feature_df_ls = []
 for feature, feature_name in zip(feature_ls, feature_name_ls):
@@ -60,6 +60,7 @@ for feature, feature_name in zip(feature_ls, feature_name_ls):
 # define the predictive model ones (make a grid search initially to get a feeling for the params)
 randy = RandomForestRegressor(max_depth=5, max_features='log2', n_estimators=300, n_jobs=-1, random_state=42) # opt on ndvi-2 Dedza
 randy = RandomForestRegressor(max_depth=5, max_features=None, n_estimators=300, n_jobs=-1, random_state=42) # opt on ndvi-4/8 Dedza
+randy = RandomForestRegressor(max_features=None, n_estimators=300, n_jobs=-1, random_state=42) # opt on ndvi-mmm Dedza
 #randy = loyocv_grid_search(X, y, years=X[:, 0], model=randy, param_grid=rf_param_grid)
 
 # columns to be filled with predictions
@@ -75,32 +76,33 @@ for adm, adm_yield_df in yield_df.groupby(["country", "adm1", "adm2"]):  #
     for processed_feature_df, feature_name in zip(processed_feature_df_ls, feature_name_ls):
         adm_feature_df = processed_feature_df.loc[adm_yield_df.index]
 
-        X = pd.concat([adm_yield_df["harv_year"], adm_yield_df["bench_lin_reg"], adm_feature_df], axis=1).values
+        X = pd.concat([adm_yield_df["harv_year"] - 2010, adm_feature_df], axis=1).values  # , adm_yield_df["bench_lin_reg"]
         y = adm_yield_df["yield"]
-
+        #assert False
         start = time.time()
         y_preds, model_mse = loyocv(X, y, years=adm_yield_df["harv_year"], model=randy, model_name=f"{adm}, {feature_name}", print_result=True)
         print(time.time() - start)
-        assert False
+        #assert False
         # fill into df
         if np.any(y_preds < 0):
             y_preds[y_preds < 0] = 0
         yield_df.loc[adm_yield_df.index, feature_name + "_pred"] = y_preds
 
 # save
-yield_df.to_csv(RESULTS_DATA_DIR / f"feature_selection/yield_feature_prediction_{length}.csv", index=False)
+#yield_df.to_csv(RESULTS_DATA_DIR / f"feature_selection/yield_feature_prediction_{length}.csv", index=False)
 
 
 # VISUALIZE ########
-#yield_df = pd.read_csv(RESULTS_DATA_DIR / f"feature_selection/yield_feature_prediction_2.csv", keep_default_na=True)
+#yield_df = pd.read_csv(RESULTS_DATA_DIR / f"feature_selection/yield_feature_prediction_mmm.csv", keep_default_na=True)
 
 # calculate and plot mse for each feature and country
 mse_matrix = []
 mse_ls = []
 for feature in feature_name_ls:
     y_pred = yield_df[feature + "_pred"]
+    bench_mse = np.mean((yield_df["yield"] - yield_df["bench_lin_reg"]) ** 2)
     mse = np.mean((yield_df["yield"] - y_pred) ** 2)
-    mse_ls.append(mse)
+    mse_ls.append(1 - mse / bench_mse)
 mse_matrix.append(mse_ls)
 country_ls = []
 for country, country_yield_df in yield_df.groupby("country"):
@@ -108,17 +110,23 @@ for country, country_yield_df in yield_df.groupby("country"):
     mse_ls = []
     for feature in feature_name_ls:
         y_pred = country_yield_df[feature + "_pred"]
+        bench_mse = np.mean((country_yield_df["yield"] - country_yield_df["bench_lin_reg"]) ** 2)
         mse = np.mean((country_yield_df["yield"] - y_pred) ** 2)
-        mse_ls.append(mse)
+        mse_ls.append(1 - mse / bench_mse)
     mse_matrix.append(mse_ls)
 mse_df = pd.DataFrame(np.array(mse_matrix).T, index=feature_name_ls, columns=np.concatenate([["all"], country_ls]))
 
 # Plotting the dataframe with individually normalized columns in the same plot without colorbar and flipped colormap
 plt.figure(figsize=(13, 8))
-# Normalize each column separately
-norm_all = mse_df.apply(lambda x: Normalize(vmin=x.min(), vmax=x.max())(x))
-ax = sns.heatmap(norm_all, annot=mse_df, cmap='Greens_r', cbar=False, fmt=".6f", xticklabels=True, yticklabels=True)
 
-plt.title(f'Individual feature performance by RMSE with feature length of {length}')
+heatmap = sns.heatmap(mse_df, annot=True, cmap='RdYlGn', fmt=".2f",
+                      vmax=1.0, vmin=-1.0)
+
+if length == 1:
+    plt.title(f'Individual feature performance by RMSE using average over season')
+elif length == "mmm":
+    plt.title(f'Individual feature performance by RMSE using mean, min & max of season')
+else:
+    plt.title(f'Individual feature performance by RMSE with feature length of {length}')
 plt.savefig(RESULTS_DATA_DIR / f"feature_selection/plots/indi_feature_{length}_mse.png", dpi=300)
 plt.show()

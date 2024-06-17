@@ -42,7 +42,7 @@ for feature, feature_name in zip(feature_ls, feature_name_ls):
                                               cc_df=cc_df,
                                               feature_df=feature_df,
                                               feature_name=feature_name,
-                                              length=20,
+                                              length=8,
                                               start_before_sos=0,
                                               end_before_eos=60)
     processed_feature_df_ls.append(processed_feature_df)
@@ -52,7 +52,11 @@ for feature, feature_name in zip(feature_ls, feature_name_ls):
 
 yearly_avg_processed_feature_mtx = np.array([np.mean(df.values, 1) for df in processed_feature_df_ls])
 yearly_avg_processed_feature_df = pd.DataFrame(yearly_avg_processed_feature_mtx.T, columns=feature_name_ls)
-corr = yearly_avg_processed_feature_df.corr()
+corr_mtx_ls = []
+for adm, adm_yield_df in yield_df.groupby(["country", "adm1", "adm2"]):
+    corr_mtx_ls.append(yearly_avg_processed_feature_df.loc[adm_yield_df.index].corr())
+corr = pd.DataFrame(np.mean([corr_mtx.values for corr_mtx in corr_mtx_ls], 0), columns = feature_name_ls, index=feature_name_ls)
+#corr = yearly_avg_processed_feature_df.corr()
 
 plt.figure(figsize=(13, 12))  # Set the size of the plot
 sns.set(style='white')  # Set the style to white
@@ -70,7 +74,7 @@ plt.xticks(rotation=45, ha='right')
 plt.yticks(rotation=0)
 
 # Show and save the plot
-plt.savefig(PROCESSED_DATA_DIR / "feature engineering/plots/over_year_correlation_mtx.png", dpi=600)
+#plt.savefig(PROCESSED_DATA_DIR / "feature engineering/plots/over_year_correlation_mtx.png", dpi=600)
 plt.show()
 
 

@@ -21,7 +21,16 @@ relative_feature_set = ["si-ndvi", "si-preci-sum", "pr-belowP01", "pr-aboveP99",
 
 absolute_feature_set = ["ndvi", "pr-max", "min-temp-median", "max-temp-median"]
 
+ndvi_feature_set = ["si-ndvi"]
+
+preci_set = ["si-preci-sum", "pr-belowP01", "pr-aboveP99"]
+
+temp_set = ["si-temp-median", "min-temp-belowP01", "max-temp-aboveP99"]
+
 # feature sets to be trained on
 feature_sets = {"all": feature_location_dict,
                 "relative_features": {key: feature_location_dict[key] for key in relative_feature_set},
-                "absolute_features": {key: feature_location_dict[key] for key in absolute_feature_set}}
+                "absolute_features": {key: feature_location_dict[key] for key in absolute_feature_set},
+                "ndvi": {key: feature_location_dict[key] for key in ndvi_feature_set},
+                "preci": {key: feature_location_dict[key] for key in preci_set},
+                "temp": {key: feature_location_dict[key] for key in temp_set}}
