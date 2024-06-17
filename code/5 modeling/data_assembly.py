@@ -6,6 +6,25 @@ from matplotlib import pyplot as plt
 
 from sklearn.preprocessing import StandardScaler
 
+from config import PROCESSED_DATA_DIR
+
+
+def process_list_of_feature_df(yield_df, cc_df, feature_dict, length, start_before_sos, end_before_eos):
+    processed_feature_df_dict = {}
+    for feature_name, feature_path in feature_dict.items():
+        feature_df = pd.read_csv(PROCESSED_DATA_DIR / feature_path, keep_default_na=False)
+
+        # apply CC for each yield datapoint
+        processed_feature_df = process_feature_df(yield_df=yield_df,
+                                                  cc_df=cc_df,
+                                                  feature_df=feature_df,
+                                                  feature_name=feature_name,
+                                                  length=length,
+                                                  start_before_sos=start_before_sos,
+                                                  end_before_eos=end_before_eos)
+        processed_feature_df_dict[feature_name] = processed_feature_df
+    return processed_feature_df_dict
+
 
 def process_feature_df(yield_df, cc_df, feature_df, length, feature_name, start_before_sos, end_before_eos):
     # create common 'adm' column for faster matching of all dataframes

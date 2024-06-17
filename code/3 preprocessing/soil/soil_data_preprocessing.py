@@ -5,7 +5,7 @@ import rasterio
 
 from config import *
 from crop_mask.crop_mask_functions import load_geoglam_crop_mask
-from soil.soil_functions import load_soil_data
+from soil.soil_functions import load_soilgrid
 
 # load administrative boundaries with geographic information
 adm_map = gpd.read_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp")
@@ -15,9 +15,9 @@ crop_mask, target_transform, target_crs = load_geoglam_crop_mask(lon_min=22, lon
 
 # load soil data with same transformation like the crop mask.
 # ALERT!: Soil-data must be provided with the exact same geographic boundaries like given above
-soil_nutrient_maps, soil_nutrients = load_soil_data(target_crs,
-                                                    target_width=crop_mask.shape[1],
-                                                    target_height=crop_mask.shape[0])
+soil_nutrient_maps, soil_nutrients = load_soilgrid(target_crs,
+                                                   target_width=crop_mask.shape[1],
+                                                   target_height=crop_mask.shape[0])
 
 # make soil columns to fill in a loop in the next step
 for soil_nutrient in soil_nutrients:

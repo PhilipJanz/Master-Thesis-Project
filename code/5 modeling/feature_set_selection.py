@@ -10,7 +10,7 @@ from sklearn.ensemble import RandomForestRegressor
 from config import PROCESSED_DATA_DIR, RESULTS_DATA_DIR
 from crop_calendar.crop_calendar_functions import load_my_cc
 from cv_grid_search import cv_grid_search, loyocv_grid_search
-from models import rf_param_grid
+from models import param_grid_rf
 from data_assembly import process_feature_df
 from loyocv import loyocv, loyocv_parallel
 
@@ -41,7 +41,7 @@ feature_name_ls = ["ndvi", "si-ndvi", "evi", "si-evi",
                    "temp-median", "si-temp-median", "min-temp-median", "max-temp-median",
                    "min-temp-belowP01", "max-temp-aboveP99"]  # ,
 # length of feature timeseries per season
-length = "mmm"
+length = 5 # "mmm"
 
 processed_feature_df_ls = []
 for feature, feature_name in zip(feature_ls, feature_name_ls):
@@ -53,7 +53,7 @@ for feature, feature_name in zip(feature_ls, feature_name_ls):
                                               feature_df=feature_df,
                                               feature_name=feature_name,
                                               length=length,
-                                              start_before_sos=0,
+                                              start_before_sos=30,
                                               end_before_eos=60)
     processed_feature_df_ls.append(processed_feature_df)
 
