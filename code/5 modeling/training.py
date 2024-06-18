@@ -13,7 +13,7 @@ def train_and_predict(X_train, y_train, X_test, y_test, model, plot_train_histor
     """
     if hasattr(model, "epochs"): # Keras NN
         my_model = tf.keras.models.clone_model(model)
-        my_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=model.learning_rate), loss=tf.keras.losses.MeanSquaredError())
+        my_model.compile(optimizer="adam", loss=tf.keras.losses.MeanSquaredError())
         history = my_model.fit(X_train, y_train, epochs=model.epochs, batch_size=model.batch_size, verbose=0)#, validation_data=(X_test, y_test))
         # plot if wanted
         if plot_train_history:
@@ -30,7 +30,7 @@ def train_and_predict(X_train, y_train, X_test, y_test, model, plot_train_histor
             plt.yscale('log')
             plt.legend()
             plt.show()
-        y_pred = my_model.predict(X_test,verbose=0).T[0]
+        y_pred = my_model.predict(X_test, verbose=0).T[0]
     else: # Sklearn
         my_model = deepcopy(model)
         my_model.fit(X_train, y_train)

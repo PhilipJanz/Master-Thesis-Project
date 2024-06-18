@@ -41,7 +41,7 @@ feature_name_ls = ["ndvi", "si-ndvi", "evi", "si-evi",
                    "temp-median", "si-temp-median", "min-temp-median", "max-temp-median",
                    "min-temp-belowP01", "max-temp-aboveP99"]  # ,
 # length of feature timeseries per season
-length = 5 # "mmm"
+length = 10 # "mmm"
 
 processed_feature_df_ls = []
 for feature, feature_name in zip(feature_ls, feature_name_ls):
@@ -78,7 +78,7 @@ for adm, adm_yield_df in yield_df.groupby(["country", "adm1", "adm2"]):  #
 
         X = pd.concat([adm_yield_df["harv_year"] - 2010, adm_feature_df], axis=1).values  # , adm_yield_df["bench_lin_reg"]
         y = adm_yield_df["yield"]
-        #assert False
+        assert adm != "(Malawi-Southern-Balaka)"
         start = time.time()
         y_preds, model_mse = loyocv(X, y, years=adm_yield_df["harv_year"], model=randy, model_name=f"{adm}, {feature_name}", print_result=True)
         print(time.time() - start)

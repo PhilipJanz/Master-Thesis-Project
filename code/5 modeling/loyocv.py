@@ -7,6 +7,7 @@ from copy import deepcopy
 import matplotlib.pyplot as plt
 from datetime import datetime
 import time
+import tensorflow as tf
 
 # preprocessing
 from sklearn.preprocessing import StandardScaler
@@ -124,6 +125,7 @@ def nested_loyocv(X, y, years, model_ls, model_name_ls, print_result=False, para
                 _, model_mse = loyocv(X=X_train, y=y_train, years=years_train, model=model, model_name=model_name, print_result=print_result)
             # save the scores
             scores.append(model_mse)
+
             # the following line is a bit cheating but it is reasonable from my personal experience. When the performance drops with higher hypers: stop process
             if len(scores) >= 2:
                 if scores[-1] > scores[-2]:
@@ -131,33 +133,12 @@ def nested_loyocv(X, y, years, model_ls, model_name_ls, print_result=False, para
         # choose the best performing hyperparameters for testing on the hold out year
         ix_best_model = np.argmin(scores)
 
-        if hasattr(model_ls[ix_best_model], "epochs"):  # NN based on keras
-            best_model = tf.keras.models.clone_model(model_ls[ix_best_model])
-            best_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate), loss=tf.keras.losses.MeanSquaredError())
-            history = best_model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0, validation_data=(X_test, y_test))
-            loss = history.history["loss"]
-            val_loss = history.history["val_loss"]
-            plt.figure(figsize=(10, 6))
-            plt.plot(loss, 'bo-', label='Training loss', alpha=0.7)
-            plt.plot(val_loss, 'ro-', label='Validation loss', alpha=0.7)
-            plt.hlines(xmin=0, xmax=len(loss), y=min(val_loss), color="darkgrey", label=f"Minimum val loss: {round(min(val_loss), 3)}, ({np.argmin(val_loss)}); Final val-loss: {round(val_loss[-1], 3)}")
-            plt.title(f'Training and Validation Loss, mode: {model_name_ls[ix_best_model]}')
-            plt.xlabel('Epochs')
-            plt.ylabel('Loss')
-            plt.ylim([0.001, 5])  # Be cautious with log scale: 0 cannot be shown on a log scale
-            plt.yscale('log')
-            plt.legend()
-            plt.show()
-            y_pred = best_model.predict(X_test, verbose=0).T[0]
-        else: # Sklearn models
-            best_model = deepcopy(model_ls[ix_best_model])
-            best_model.fit(X_train, y_train)
-            y_pred = best_model.predict(X_test)
+        y_pred, mse = train_and_predict(X_train, y_train, X_test, y_test, model=model_ls[ix_best_model], plot_train_history=True)
 
         # save the score & best hyperparameter
         best_model_ls.append(model_name_ls[ix_best_model])
         y_preds[np.invert(year_0_bool)] = y_pred
-        print(year_0, ", best_model: ", str(model_name_ls[ix_best_model]), ", mse: ", str(round(np.mean((y_test - y_pred) ** 2), 3)))
+        print(year_0, ", best_model: ", str(model_name_ls[ix_best_model]), ", mse: ", str(round(mse, 3)))
 
     print("Nested-LOYOCV finished! Mean MSE under selected models:", np.round(np.mean((y - y_preds) ** 2), 3))
     unique, counts = np.unique(best_model_ls, return_counts=True)
