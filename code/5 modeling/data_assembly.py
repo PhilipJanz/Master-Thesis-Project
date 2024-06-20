@@ -9,6 +9,31 @@ from sklearn.preprocessing import StandardScaler
 from config import PROCESSED_DATA_DIR
 
 
+def make_X(df_ls, standardize=True):
+    if standardize:
+        standardize_mtx_ls = []
+        column_ls = []
+        for df in df_ls:
+            if len(df.shape) == 1:
+                standardized_values = df.values - np.mean(df.values) / np.std(df.values)
+                standardize_mtx_ls.append(standardized_values.reshape(len(standardized_values), 1))
+                column_ls.append([df.name])
+            else:
+                # filter columns where all values are the same
+                columns_to_keep = [col for col in df.columns if df[col].nunique() > 1]
+                df = df[columns_to_keep]
+
+                standardize_mtx_ls.append(df.values - np.mean(df.values) / np.std(df.values))
+                column_ls.append(list(df.columns))
+
+        X = np.concatenate(standardize_mtx_ls, axis=1)
+        return X, np.concatenate(column_ls)
+    else:
+        X = pd.concat(df_ls, axis=1).values
+        column_ls = np.concatenate([[df.name] if len(df.shape) == 1 else list(df.columns) for df in df_ls])
+        return X, column_ls
+
+
 def process_list_of_feature_df(yield_df, cc_df, feature_dict, length, start_before_sos, end_before_eos):
     processed_feature_df_dict = {}
     for feature_name, feature_path in feature_dict.items():

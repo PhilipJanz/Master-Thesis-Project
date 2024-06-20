@@ -76,7 +76,7 @@ for adm, adm_yield_df in yield_df.groupby(["country", "adm1", "adm2"]):  #
     for processed_feature_df, feature_name in zip(processed_feature_df_ls, feature_name_ls):
         adm_feature_df = processed_feature_df.loc[adm_yield_df.index]
 
-        X = pd.concat([adm_yield_df["harv_year"] - 2010, adm_feature_df], axis=1).values  # , adm_yield_df["bench_lin_reg"]
+        X = pd.concat([adm_yield_df["harv_year"] - 2010, adm_feature_df], axis=1).values
         y = adm_yield_df["yield"]
         assert adm != "(Malawi-Southern-Balaka)"
         start = time.time()
