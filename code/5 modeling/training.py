@@ -1,9 +1,13 @@
 from copy import deepcopy
 
+import keras
 import numpy as np
+import scikeras
 
 import tensorflow as tf
 from matplotlib import pyplot as plt
+
+from models import create_nn
 
 
 def train_and_predict(X_train, y_train, X_test, y_test, model, plot_train_history=None):
@@ -11,12 +15,19 @@ def train_and_predict(X_train, y_train, X_test, y_test, model, plot_train_histor
     Train the model and predict the test set.
     This function is designed to run in parallel for each cross-validation fold.
     """
-    if hasattr(model, "epochs"): # Keras NN
-        my_model = tf.keras.models.clone_model(model)
-        my_model.compile(optimizer="adam", loss=tf.keras.losses.MeanSquaredError())
-        history = my_model.fit(X_train, y_train, epochs=model.epochs, batch_size=model.batch_size, verbose=0)#, validation_data=(X_test, y_test))
-        # plot if wanted
-        if plot_train_history:
+    if type(model) == scikeras.wrappers.KerasRegressor: # Keras NN
+        my_model = create_nn(activation=model.model__activation,
+                             dropout_rate=model.model__dropout_rate,
+                             learning_rate=model.model__learning_rate,
+                             neurons=model.model__neurons,
+                             optimizer=model.model__optimizer,
+                             input_shape=(X_train.shape[1],))
+
+        if not plot_train_history:
+            my_model.fit(X_train, y_train, epochs=model.epochs, batch_size=model.batch_size, verbose=0)
+        else:
+            history = my_model.fit(X_train, y_train, epochs=model.epochs, batch_size=model.batch_size,
+                                   verbose=0, validation_data=(X_test, y_test))
             loss = history.history["loss"]
             val_loss = history.history["val_loss"]
             plt.figure(figsize=(10, 6))
@@ -36,4 +47,4 @@ def train_and_predict(X_train, y_train, X_test, y_test, model, plot_train_histor
         my_model.fit(X_train, y_train)
         y_pred = my_model.predict(X_test)
     mse = np.mean((y_test - y_pred) ** 2)
-    return y_pred, mse
+    return y_pred, mse, my_model

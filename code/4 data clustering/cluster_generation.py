@@ -59,69 +59,72 @@ season_diff_preci_profile_mtx = [np.diff(x) for x in season_preci_profile_mtx]
 # make cluster based on smoothed NDVI values
 kmean_elbow(data_mtx=season_ndvi_profile_mtx, max_k=21)
 # choose k
-k = 5
+k = 10
 labels, _ = kmean_cluster(data_mtx=season_ndvi_profile_mtx, n_clusters=k)
-cc_df["ndvi_cluster"] = labels
+cc_df[f"ndvi-{k}_cluster"] = labels
 
 # make cluster based on diff NDVI values
 kmean_elbow(data_mtx=season_diff_ndvi_profile_mtx, max_k=21)
 # choose k
-k = 5
+k = 10
 labels, _ = kmean_cluster(data_mtx=season_diff_ndvi_profile_mtx, n_clusters=k)
-cc_df["diff_ndvi_cluster"] = labels
+cc_df[f"diff_ndvi-{k}_cluster"] = labels
 
 # make cluster based on precipitation values
 kmean_elbow(data_mtx=season_preci_profile_mtx, max_k=21)
 # choose k
-k = 8
+k = 10
 labels, _ = kmean_cluster(data_mtx=season_preci_profile_mtx, n_clusters=k)
-cc_df["preci_cluster"] = labels
+cc_df[f"preci-{k}_cluster"] = labels
 
 # make cluster based on diff- precipitation values
 kmean_elbow(data_mtx=season_diff_preci_profile_mtx, max_k=21)
 # choose k
 k = 10
 labels, _ = kmean_cluster(data_mtx=season_diff_preci_profile_mtx, n_clusters=k)
-cc_df["diff_preci_cluster"] = labels
+cc_df[f"diff_preci-{k}_cluster"] = labels
+
+for cluster_name = season_profile_mtx in zip[season_ndvi_profile_mtx, season_diff_ndvi_profile_mtx, season_preci_profile_mtx, season_diff_preci_profile_mtx]:
+    for k in[5, 20]:
 
 
 # PLOT #####
 
 # NDVI
 plot_cluster_profiles(cluster_data=cc_df.reset_index(),
-                      cluster_column="ndvi_cluster",
+                      cluster_column=f"ndvi-{k}_cluster",
                       profile_data=season_ndvi_profile_mtx,
-                      cluster_name="NDVI")
+                      cluster_name=f"NDVI-{k}")
 plot_cluster_map(cluster_data=cc_df.reset_index(),
-                 cluster_column="ndvi_cluster",
-                 cluster_name="NDVI")
+                 cluster_column=f"ndvi-{k}_cluster",
+                 cluster_name=f"NDVI-{k}")
 
 # NDVI first derivative
 plot_cluster_profiles(cluster_data=cc_df.reset_index(),
-                      cluster_column="diff_ndvi_cluster",
+                      cluster_column=f"diff_ndvi-{k}_cluster",
                       profile_data=season_diff_ndvi_profile_mtx,
-                      cluster_name="Diff-NDVI")
+                      cluster_name=f"Diff-NDVI-{k}")
 plot_cluster_map(cluster_data=cc_df,
-                 cluster_column="diff_ndvi_cluster",
-                 cluster_name="Diff-NDVI")
+                 cluster_column=f"diff_ndvi-{k}_cluster",
+                 cluster_name=f"Diff-NDVI-{k}")
 
 # Precipitation
 plot_cluster_profiles(cluster_data=cc_df,
-                      cluster_column="preci_cluster",
+                      cluster_column=f"preci-{k}_cluster",
                       profile_data=season_preci_profile_mtx,
-                      cluster_name="Precipitation")
+                      cluster_name=f"Precipitation-{k}")
 plot_cluster_map(cluster_data=cc_df,
-                 cluster_column="preci_cluster",
-                 cluster_name="Precipitation")
+                 cluster_column=f"preci-{k}_cluster",
+                 cluster_name=f"Precipitation-{k}")
 
 # Precipitation first derivative
 plot_cluster_profiles(cluster_data=cc_df,
-                      cluster_column="diff_preci_cluster",
+                      cluster_column=f"diff_preci-{k}_cluster",
                       profile_data=season_diff_preci_profile_mtx,
-                      cluster_name="Diff-Precipitation")
+                      cluster_name=f"Diff-Precipitation-{k}")
 plot_cluster_map(cluster_data=cc_df,
-                 cluster_column="diff_preci_cluster",
-                 cluster_name="Diff-Precipitation")
+                 cluster_column=f"diff_preci-{k}_cluster",
+                 cluster_name=f"Diff-Precipitation-{k}")
 
 # save
 save_cluster_data(cluster_df=cc_df.drop(columns=['sos', 'eos', 'season_length']))
