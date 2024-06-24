@@ -37,7 +37,7 @@ def train_and_predict(X_train, y_train, X_test, y_test, model, plot_train_histor
             plt.title(f'Training and Validation Loss')
             plt.xlabel('Epochs')
             plt.ylabel('Loss')
-            plt.ylim([0.03, 5])  # Be cautious with log scale: 0 cannot be shown on a log scale
+            plt.ylim([0.005, 5])  # Be cautious with log scale: 0 cannot be shown on a log scale
             plt.yscale('log')
             plt.legend()
             plt.show()

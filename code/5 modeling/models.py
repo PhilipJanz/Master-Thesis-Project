@@ -54,7 +54,7 @@ param_grid_nn = {
     'model__dropout_rate': [0.0, 0.2],
     'model__activation': ['relu'],
     'model__optimizer': ['adam'], # , "rmsprop"
-    'model__learning_rate': [0.01, 0.001], # 0.001, 0.01, 0.1
+    'model__learning_rate': [0.001], # 0.001, 0.01, 0.1
     'epochs': [500],
     'batch_size': [20, 50, 100]
 }

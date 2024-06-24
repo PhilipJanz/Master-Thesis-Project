@@ -145,6 +145,9 @@ def loyocv_grid_search(X, y, years, model, param_grid, folds=None, print_result=
     group_kfold = GroupKFold(n_splits=len(np.unique(years)))
 
     if model == "create_nn":
+        # adjust batch size based on training data size:
+        param_grid['batch_size'] = [len(X), int(len(X) / 2)]
+
         # Wrap the Keras model with KerasRegressor
         model = KerasRegressor(model=create_nn, input_shape=(X.shape[1],), verbose=0) # , optimizer=Adam()
 
@@ -188,4 +191,4 @@ def group_years(years, n):
     # Create the final output list with the same length as the input list
     grouped_years = [year_to_group[year] for year in years]
 
-    return grouped_years
+    return np.array(grouped_years)

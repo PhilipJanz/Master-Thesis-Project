@@ -15,7 +15,7 @@ def make_X(df_ls, standardize=True):
         column_ls = []
         for df in df_ls:
             if len(df.shape) == 1:
-                standardized_values = df.values - np.mean(df.values) / np.std(df.values)
+                standardized_values = (df.values - np.mean(df.values)) / np.std(df.values)
                 standardize_mtx_ls.append(standardized_values.reshape(len(standardized_values), 1))
                 column_ls.append([df.name])
             else:
@@ -23,7 +23,7 @@ def make_X(df_ls, standardize=True):
                 columns_to_keep = [col for col in df.columns if df[col].nunique() > 1]
                 df = df[columns_to_keep]
 
-                standardize_mtx_ls.append(df.values - np.mean(df.values) / np.std(df.values))
+                standardize_mtx_ls.append((df.values - np.mean(df.values)) / np.std(df.values))
                 column_ls.append(list(df.columns))
 
         X = np.concatenate(standardize_mtx_ls, axis=1)
