@@ -5,16 +5,15 @@ import pandas as pd
 import pickle
 from copy import deepcopy
 import matplotlib.pyplot as plt
-from datetime import datetime
 import time
+import random
+from collections import defaultdict
 
-# preprocessing
-from sklearn.preprocessing import StandardScaler
+from scikeras.wrappers import KerasRegressor
 
-# models
-from sklearn.linear_model import LinearRegression, Lasso
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.svm import SVR
+# sklear
+from sklearn.model_selection import GridSearchCV, GroupKFold
+from tensorflow.keras.models import Sequential
 
 # parallelization
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -23,18 +22,24 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 
+from models import create_nn
 from training import train_and_predict
 
 # Ignore ConvergenceWarning
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
 
-def loyocv(X, y, years, model, model_name, print_result=False):
+def loyocv(X, y, years, model, model_name, folds=None, print_result=False):
     """
     model: initialized model with .fit and .predict
     """
     # check if years are sorted. If not the functions output y_preds would not align with the input array 'y'
     assert np.all(np.sort(years) == years), "Sort by year in your data preprocessing!"
+
+    # shrink number of folds if wanted
+    if folds:
+        years = group_years(years=years, n=folds)
+
     # initialize arrays to be filled
     scores = []
     y_preds = np.repeat(np.nan, len(y))
@@ -46,7 +51,7 @@ def loyocv(X, y, years, model, model_name, print_result=False):
         X_test = X[~year_0_bool]
         y_test = y[~year_0_bool]
 
-        y_pred, mse = train_and_predict(X_train, y_train, X_test, y_test, model=model)
+        y_pred, mse, _ = train_and_predict(X_train, y_train, X_test, y_test, model=model)
 
         # save the score & best hyperparameter
         scores.append(mse)
@@ -62,8 +67,7 @@ def loyocv_parallel(X, y, years, model, model_name, print_result=False):
     """
     model: initialized model with .fit and .predict
     """
-    # check if years are sorted. If not the functions output y_preds would not align with the input array 'y'
-    assert np.all(np.sort(years) == years), "Sort by year in your data preprocessing!"
+
     # initialize arrays to be filled
     scores = []
     y_preds = np.repeat(np.nan, len(y))
@@ -96,15 +100,18 @@ def loyocv_parallel(X, y, years, model, model_name, print_result=False):
     return y_preds, model_mse
 
 
-def nested_loyocv(X, y, years, model_ls, model_name_ls, print_result=False, parallel=False):
+def nested_loyocv(X, y, years, model, param_grid, folds=None, print_result=False):
     """
     model_ls:  list of initialized models with .fit and .predict.
     """
-    # check if years are sorted. If not the functions output y_preds would not align with the input array 'y'
-    assert np.all(np.sort(years) == years), "Sort by year in your data preprocessing!"
+
     # initialize arrays to be filled
-    best_model_ls = []
+    # dict for best model (hyperparameters) for each year
+    best_model_dict = {}
+
+    # final predictions on unseen data
     y_preds = np.repeat(np.nan, len(y))
+
     # first level leave-one-year-out
     for year_0 in np.unique(years):
         year_0_bool = (years != year_0)
@@ -112,55 +119,76 @@ def nested_loyocv(X, y, years, model_ls, model_name_ls, print_result=False, para
         X_train = X[year_0_bool]
         y_train = y[year_0_bool]
         years_train = years[year_0_bool]
-        X_test = X[np.invert(year_0_bool)]
-        y_test = y[np.invert(year_0_bool)]
+        X_test = X[~year_0_bool]
+        y_test = y[~year_0_bool]
 
-        scores = []
-        for model, model_name in zip(model_ls, model_name_ls):
-            # second level loyocv to determine the best model (hyperparameter) for that split
-            if parallel:
-                _, model_mse = loyocv_parallel(X=X_train, y=y_train, years=years_train, model=model, model_name=model_name, print_result=print_result)
-            else:
-                _, model_mse = loyocv(X=X_train, y=y_train, years=years_train, model=model, model_name=model_name, print_result=print_result)
-            # save the scores
-            scores.append(model_mse)
-            # the following line is a bit cheating but it is reasonable from my personal experience. When the performance drops with higher hypers: stop process
-            if len(scores) >= 2:
-                if scores[-1] > scores[-2]:
-                    break
-        # choose the best performing hyperparameters for testing on the hold out year
-        ix_best_model = np.argmin(scores)
+        best_model, _ = loyocv_grid_search(X_train, y_train, years_train, folds=folds, model=model, param_grid=param_grid)
 
-        if hasattr(model_ls[ix_best_model], "epochs"):  # NN based on keras
-            best_model = tf.keras.models.clone_model(model_ls[ix_best_model])
-            best_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate), loss=tf.keras.losses.MeanSquaredError())
-            history = best_model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0, validation_data=(X_test, y_test))
-            loss = history.history["loss"]
-            val_loss = history.history["val_loss"]
-            plt.figure(figsize=(10, 6))
-            plt.plot(loss, 'bo-', label='Training loss', alpha=0.7)
-            plt.plot(val_loss, 'ro-', label='Validation loss', alpha=0.7)
-            plt.hlines(xmin=0, xmax=len(loss), y=min(val_loss), color="darkgrey", label=f"Minimum val loss: {round(min(val_loss), 3)}, ({np.argmin(val_loss)}); Final val-loss: {round(val_loss[-1], 3)}")
-            plt.title(f'Training and Validation Loss, mode: {model_name_ls[ix_best_model]}')
-            plt.xlabel('Epochs')
-            plt.ylabel('Loss')
-            plt.ylim([0.001, 5])  # Be cautious with log scale: 0 cannot be shown on a log scale
-            plt.yscale('log')
-            plt.legend()
-            plt.show()
-            y_pred = best_model.predict(X_test, verbose=0).T[0]
-        else: # Sklearn models
-            best_model = deepcopy(model_ls[ix_best_model])
-            best_model.fit(X_train, y_train)
-            y_pred = best_model.predict(X_test)
+        y_pred, mse, trained_model = train_and_predict(X_train, y_train, X_test, y_test, model=best_model, plot_train_history=False)
 
         # save the score & best hyperparameter
-        best_model_ls.append(model_name_ls[ix_best_model])
-        y_preds[np.invert(year_0_bool)] = y_pred
-        print(year_0, ", best_model: ", str(model_name_ls[ix_best_model]), ", mse: ", str(round(np.mean((y_test - y_pred) ** 2), 3)))
+        best_model_dict[str(year_0)] = trained_model
+        y_preds[~year_0_bool] = y_pred
+        if print_result:
+            print(f"{year_0}, best_model: {best_model}, mse: {np.round(mse, 3)}")
+    if print_result:
+        print("Nested-LOYOCV finished! Mean MSE under selected models:", np.round(np.mean((y - y_preds) ** 2), 3))
+    return y_preds, best_model_dict
 
-    print("Nested-LOYOCV finished! Mean MSE under selected models:", np.round(np.mean((y - y_preds) ** 2), 3))
-    unique, counts = np.unique(best_model_ls, return_counts=True)
-    print("Selected models:  (model_name: counts)", dict(zip(unique, counts)))
-    return y_preds, best_model_ls
 
+def loyocv_grid_search(X, y, years, model, param_grid, folds=None, print_result=False):
+    # shrink number of folds if wanted
+    if folds:
+        years = group_years(years=years, n=folds)
+
+    # Set up the GroupKFold
+    group_kfold = GroupKFold(n_splits=len(np.unique(years)))
+
+    if model == "create_nn":
+        # adjust batch size based on training data size:
+        param_grid['batch_size'] = [len(X), int(len(X) / 2)]
+
+        # Wrap the Keras model with KerasRegressor
+        model = KerasRegressor(model=create_nn, input_shape=(X.shape[1],), verbose=0) # , optimizer=Adam()
+
+        # Set up the GridSearchCV with GroupKFold
+        grid_search = GridSearchCV(estimator=model, param_grid=param_grid,
+                                   cv=group_kfold, n_jobs=-1, scoring='neg_mean_squared_error')
+    else:
+        # Set up the GridSearchCV with GroupKFold
+        grid_search = GridSearchCV(estimator=model, param_grid=param_grid,
+                                   cv=group_kfold, n_jobs=-1, scoring='neg_mean_squared_error')
+
+    # Fit the grid search to the data
+    start = time.time()
+    grid_search = grid_search.fit(X, y, groups=years)
+    print("grid_search", time.time() - start)
+
+    # Output the results
+    if print_result:
+        print(f"Best parameters found for {model.name}: ", grid_search.best_params_)
+        print("corresponding cross-validation score: ", grid_search.best_score_)
+
+    # Use the best model
+    return grid_search.best_estimator_, np.abs(grid_search.best_score_)
+
+
+def group_years(years, n):
+    unique_years = list(set(years))
+    random.shuffle(unique_years)
+
+    # Create groups and distribute unique values randomly
+    groups = defaultdict(list)
+    for i, year in enumerate(unique_years):
+        groups[i % n].append(year)
+
+    # Map values to their groups
+    year_to_group = {}
+    for group_number, group_year in groups.items():
+        for year in group_year:
+            year_to_group[year] = group_number
+
+    # Create the final output list with the same length as the input list
+    grouped_years = [year_to_group[year] for year in years]
+
+    return np.array(grouped_years)

@@ -13,7 +13,7 @@ from rasterio.enums import Resampling
 from config import *
 
 
-def load_soil_data(target_crs, target_width, target_height):
+def load_soilgrid(target_crs, target_width, target_height):
     """
     Loads SoilGrid data and reshapes it in the right format. This function will source any file in the soilgrids folder.
     Make sure they are in the fitting format.
@@ -41,3 +41,7 @@ def load_soil_data(target_crs, target_width, target_height):
             soil_nutrient_maps.append(soil_nutrient_map)
 
     return soil_nutrient_maps, soil_nutrients
+
+
+def load_soil_data():
+    return pd.read_csv(PROCESSED_DATA_DIR / "soil/soil_property_region_level.csv", keep_default_na=False)

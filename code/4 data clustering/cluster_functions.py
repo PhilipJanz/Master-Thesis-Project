@@ -336,4 +336,4 @@ def save_cluster_data(cluster_df):
 
 
 def load_cluster_data():
-    return pd.read_csv(PROCESSED_DATA_DIR / f"data clustering/cluster_data.csv")
+    return pd.read_csv(PROCESSED_DATA_DIR / f"data clustering/cluster_data.csv", keep_default_na=False)
