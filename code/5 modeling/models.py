@@ -64,8 +64,4 @@ model_ls = {"nn": "create_nn", "lasso": Lasso(),
             "svr": SVR(),
             "rf": RandomForestRegressor(),
             }
-#model_ls = {"lasso": Lasso(),
-#            "svr": SVR()}
 model_param_grid_ls = {"nn": param_grid_nn, "lasso": param_grid_lasso, "svr": param_grid_svr, "rf": param_grid_rf, }
-#model_param_grid_ls = {"lasso": param_grid_lasso,
-#                       "svr": param_grid_svr}

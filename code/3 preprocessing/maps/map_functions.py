@@ -1,5 +1,5 @@
 import numpy as np
-import rasterio
+#import rasterio
 from matplotlib import pyplot as plt
 from matplotlib.patches import Patch
 from shapely.ops import unary_union

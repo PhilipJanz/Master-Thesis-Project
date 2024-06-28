@@ -9,7 +9,7 @@ import time
 import random
 from collections import defaultdict
 
-from scikeras.wrappers import KerasRegressor
+#from scikeras.wrappers import KerasRegressor
 
 # sklear
 from sklearn.model_selection import GridSearchCV, GroupKFold

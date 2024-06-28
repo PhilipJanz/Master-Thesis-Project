@@ -1,13 +1,8 @@
 import os
 import time
-
-import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
 import pandas as pd
 import pickle
-from matplotlib.colors import Normalize
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 
 from cluster_functions import load_cluster_data
@@ -44,7 +39,7 @@ yield_df = make_adm_column(yield_df)
 cc_df = pd.read_csv(PROCESSED_DATA_DIR / f"crop calendar/my_crop_calendar.csv", keep_default_na=False) # load_my_cc()
 
 # load and process features
-length = 5
+length = 1
 processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df, feature_dict=feature_sets["all"],
                                                        length=length, start_before_sos=30, end_before_eos=60)
 
@@ -64,9 +59,10 @@ yield_df = pd.merge(yield_df, cluster_df, on=["country", "adm1", "adm2"])
 # INITIALIZATION ##############
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 #cluster_set = "ndvi-10_cluster"
-for cluster_set in ["ndvi-10_cluster", "diff_ndvi-10_cluster", "preci-10_cluster", "diff_preci-10_cluster"]:
+for cluster_set in ["adm"]:
     # collect matrix of best feature sets (row: model, column: cluster)
     best_feature_set_mtx = []
 
@@ -108,6 +104,8 @@ for cluster_set in ["ndvi-10_cluster", "diff_ndvi-10_cluster", "preci-10_cluster
                 best_model, mse = loyocv_grid_search(X=X, y=y, years=cluster_yield_df.harv_year,
                                                      model=model, param_grid=model_param_grid_ls[model_name], folds=5)
                 print(best_model, np.round(mse, 3))
+                break
+            continue
                 X_ls.append(X)
                 X_mse_ls.append(mse)
                 print(model_name, cluster_name, feature_set_name, np.round(time.time() - start, 2), "\n")

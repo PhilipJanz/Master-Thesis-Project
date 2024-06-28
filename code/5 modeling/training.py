@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import keras
 import numpy as np
-import scikeras
+#import scikeras
 
 import tensorflow as tf
 from matplotlib import pyplot as plt
