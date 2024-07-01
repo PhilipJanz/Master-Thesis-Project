@@ -59,28 +59,28 @@ season_diff_preci_profile_mtx = [np.diff(x) for x in season_preci_profile_mtx]
 # make cluster based on smoothed NDVI values
 kmean_elbow(data_mtx=season_ndvi_profile_mtx, max_k=21)
 # choose k
-k = 10
+k = 20
 labels, _ = kmean_cluster(data_mtx=season_ndvi_profile_mtx, n_clusters=k)
 cc_df[f"ndvi-{k}_cluster"] = labels
 
 # make cluster based on diff NDVI values
 kmean_elbow(data_mtx=season_diff_ndvi_profile_mtx, max_k=21)
 # choose k
-k = 10
+k = 20
 labels, _ = kmean_cluster(data_mtx=season_diff_ndvi_profile_mtx, n_clusters=k)
 cc_df[f"diff_ndvi-{k}_cluster"] = labels
 
 # make cluster based on precipitation values
 kmean_elbow(data_mtx=season_preci_profile_mtx, max_k=21)
 # choose k
-k = 10
+k = 20
 labels, _ = kmean_cluster(data_mtx=season_preci_profile_mtx, n_clusters=k)
 cc_df[f"preci-{k}_cluster"] = labels
 
 # make cluster based on diff- precipitation values
 kmean_elbow(data_mtx=season_diff_preci_profile_mtx, max_k=21)
 # choose k
-k = 10
+k = 20
 labels, _ = kmean_cluster(data_mtx=season_diff_preci_profile_mtx, n_clusters=k)
 cc_df[f"diff_preci-{k}_cluster"] = labels
 

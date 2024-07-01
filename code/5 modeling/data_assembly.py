@@ -121,18 +121,39 @@ def year_day_to_date(year, day_of_year):
 
 
 def rescale_array(arr, new_length):
-    original_length = len(arr)
-    if new_length == original_length:
-        return arr
+    """
+    Rescales a 1D or 2D numpy array to a new length using interpolation.
 
-    # Calculate the ratio of the new length to the original length
-    ratio = new_length / original_length
+    Parameters:
+    arr (np.ndarray): Input 1D or 2D array.
+    new_length (int): The number of elements/columns in the output array.
 
-    # Create an array of the new indices, scaled appropriately
-    new_indices = np.linspace(0, original_length - 1, new_length)
+    Returns:
+    np.ndarray: The rescaled array.
+    """
+    if arr.ndim == 1:
+        original_length = len(arr)
+        if new_length == original_length:
+            return arr
 
-    # Interpolate the values at the new indices
-    rescaled_arr = np.interp(new_indices, np.arange(original_length), arr)
+        # Create an array of the new indices, scaled appropriately
+        new_indices = np.linspace(0, original_length - 1, new_length)
+
+        # Interpolate the values at the new indices
+        rescaled_arr = np.interp(new_indices, np.arange(original_length), arr)
+
+    elif arr.ndim == 2:
+        num_rows, num_cols = arr.shape
+        if new_length == num_cols:
+            return arr
+
+        rescaled_arr = np.zeros((num_rows, new_length))
+
+        for i in range(num_rows):
+            rescaled_arr[i] = rescale_array(arr[i], new_length)
+
+    else:
+        raise ValueError("Input array must be 1D or 2D")
 
     return rescaled_arr
 

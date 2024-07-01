@@ -104,8 +104,7 @@ for cluster_set in ["adm"]:
                 best_model, mse = loyocv_grid_search(X=X, y=y, years=cluster_yield_df.harv_year,
                                                      model=model, param_grid=model_param_grid_ls[model_name], folds=5)
                 print(best_model, np.round(mse, 3))
-                break
-            continue
+
                 X_ls.append(X)
                 X_mse_ls.append(mse)
                 print(model_name, cluster_name, feature_set_name, np.round(time.time() - start, 2), "\n")

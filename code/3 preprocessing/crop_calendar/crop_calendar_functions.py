@@ -9,7 +9,7 @@ from scipy.signal import find_peaks
 
 from config import PROCESSED_DATA_DIR
 from crop_calendar.profile_generation import make_profiles
-from maps.map_functions import load_africa_map
+#from maps.map_functions import load_africa_map
 
 
 def detect_one_season(ndvi_profile):

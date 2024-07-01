@@ -11,7 +11,7 @@ import seaborn as sns
 
 from crop_calendar.crop_calendar_functions import detect_seasons
 from crop_calendar.profile_generation import make_profiles
-from maps.map_functions import load_africa_map, load_aoi_map
+#from maps.map_functions import load_africa_map, load_aoi_map
 
 OMP_NUM_THREADS = 1
 

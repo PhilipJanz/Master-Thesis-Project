@@ -7,8 +7,12 @@ from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import KFold
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Input
+from tensorflow.keras.optimizers import Adam
+
+from xgboost import XGBRegressor
 
 from config import RESULTS_DATA_DIR
+from data_assembly import rescale_array
 from feature_sets_for_optuna import feature_sets
 from loyocv import group_years
 
@@ -20,15 +24,16 @@ def create_nn(trial, input_shape):
     model.add(Input(shape=(input_shape,)))
 
     # Hidden layers
-    for i in range(trial.suggest_int('n_layers', 0, 3)):
-        model.add(Dense(trial.suggest_int(f'units_layer{i+1}', 4, 256), activation='relu'))
+    for i in range(trial.suggest_int('n_layers', 1, 3)):
+        model.add(Dense(trial.suggest_int(f'units_layer{i+1}', 8, 256), activation='relu'))
         model.add(Dropout(trial.suggest_float(f'dropout_layer{i+1}', 0.0, 0.5)))
 
     # Output layer
     model.add(Dense(1, activation='linear'))
 
     # Compile model
-    model.compile(optimizer=trial.suggest_categorical('optimizer', ['adam', 'rmsprop', 'sgd']),
+    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-1, log=True)
+    model.compile(optimizer=Adam(learning_rate=learning_rate),
                   loss='mean_squared_error',
                   metrics=['mean_squared_error'])
 
@@ -40,28 +45,34 @@ class OptunaOptimizer:
                  X,
                  y,
                  years,
+                 predictor_names,
                  feature_set_selection=True,
+                 feature_len_shrinking=True,
                  model_types=['svr', 'rf', 'lasso', 'nn'],
+                 sampler=optuna.samplers.TPESampler,
                  num_folds=5,
-                 repetition_per_fold=2,
-                 num_trials=100,
+                 repetition_per_fold=1,
                  global_seed=42):
         # init
         self.X = X
         self.y = y
         self.years = years
+        self.predictor_names = predictor_names
         self.feature_set_selection = feature_set_selection
         self.model_types = model_types
         self.num_folds = num_folds
         self.repetition_per_fold = repetition_per_fold
-        self.num_trials = num_trials
         self.global_seed = global_seed
         self.feature_set_selection = feature_set_selection
+        self.feature_len_shrinking = feature_len_shrinking
 
         # Create a new Optuna study if it doesn't exist or load the existing one
-        self.study = optuna.create_study(direction="minimize")
+        self.study = optuna.create_study(direction="minimize", sampler=sampler)
 
     def objective(self, trial):
+        # create list of bools representing predictors from X to keep
+        predictor_selection_bool = np.repeat(True, self.X.shape[1])
+
         if self.feature_set_selection:
             # Select True / False for each feature
             feature_set_selection_bool = [trial.suggest_categorical(name, [True, False]) for name in feature_sets]
@@ -69,17 +80,35 @@ class OptunaOptimizer:
             # list names of features not selected to filter them out
             left_out_feature_sets = [name for name, selected in zip(feature_sets, feature_set_selection_bool) if not selected]
 
-            # create list of bools representing predictors from X to keep
-            predictor_selection_bool = np.repeat(True, self.X.shape[1])
             # set predictors False when they were not selected
             for left_out_feature_set in left_out_feature_sets:
                 left_out_features = feature_sets[left_out_feature_set]
-                predictor_selection_bool = predictor_selection_bool * [np.all([x not in predictor for x in left_out_features]) for predictor in predictor_names]
+                predictor_selection_bool = predictor_selection_bool * [np.all([x not in predictor for x in left_out_features]) for predictor in self.predictor_names]
 
             # make new X with selected feature sets
             X_sel = self.X[:, predictor_selection_bool]
         else:
             X_sel = self.X.copy()
+
+        if self.feature_len_shrinking:
+            ts_features = np.unique(["_".join(x.split("_")[:-1]) for x in self.predictor_names[predictor_selection_bool] if x.split("_")[-1].isdigit()])
+
+            transformed_feature_columns = np.repeat(False, X_sel.shape[1])
+            new_X = []
+
+            for ts_feature in ts_features:
+                feature_len = trial.suggest_int(ts_feature + '_len', 1, 10)
+
+                ts_feature_loc = np.array([ts_feature in name for name in self.predictor_names[predictor_selection_bool]])
+                transformed_feature_columns = transformed_feature_columns + ts_feature_loc
+
+                if feature_len == 1:
+                    new_X.append(np.mean(X_sel[:, ts_feature_loc], 1).reshape(-1, 1))
+                else:
+                    new_X.append(rescale_array(X_sel[:, ts_feature_loc], feature_len))
+            new_X.append(X_sel[:, ~transformed_feature_columns])
+            X_sel = np.hstack(new_X)
+
 
         # Select model type
         model_name = trial.suggest_categorical('model_type', self.model_types)
@@ -107,6 +136,17 @@ class OptunaOptimizer:
             input_shape = X_sel.shape[1]
             epochs = trial.suggest_int('epochs', 10, 500)
             batch_size = trial.suggest_int('batch_size', 1, len(X_sel))
+        elif model_name == 'xgb':
+            params = {
+                'n_estimators': trial.suggest_int('n_estimators', 50, 500),
+                'max_depth': trial.suggest_int('max_depth', 1, 20),
+                'learning_rate': trial.suggest_float('learning_rate', 1e-5, 0.1, log=True),
+                'subsample': trial.suggest_float('subsample', 0.5, 1.0),
+                'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
+                'gamma': trial.suggest_float('gamma', 0, 5),
+                'reg_alpha': trial.suggest_float('reg_alpha', 1e-9, 100.0, log=True),
+                'reg_lambda': trial.suggest_float('reg_lambda', 1e-9, 100.0, log=True)
+            }
         else:
             raise AssertionError(f"Model name '{model_name}' is not in: ['svr', 'rf', 'lasso', 'nn']")
 
@@ -135,7 +175,11 @@ class OptunaOptimizer:
                 elif model_name == 'lasso':
                     model = Lasso(**params)
                 elif model_name == 'nn':
-                    model = create_nn(trial, input_shape)  # Create a fresh untrained model
+                    model = create_nn(trial, input_shape)
+                elif model_name == 'xgb':
+                    model = XGBRegressor(**params)
+                else:
+                    raise AssertionError(f"Model name '{model_name}' is not in: ['svr', 'rf', 'lasso', 'nn']")
 
                 # Fit the model and diffrentiate between the model classes
                 if model_name == 'nn':
@@ -160,9 +204,9 @@ class OptunaOptimizer:
 
         return np.mean(mse_ls)
 
-    def optimize(self, timeout=600,
+    def optimize(self, timeout=600, n_trials=100,
                    n_jobs=-1, show_progress_bar=True, gc_after_trial=True, print_result=True):
-        self.study.optimize(self.objective, n_trials=self.num_trials, timeout=timeout,
+        self.study.optimize(self.objective, n_trials=n_trials, timeout=timeout,
                             n_jobs=n_jobs, show_progress_bar=show_progress_bar) # TODO , gc_after_trial=gc_after_trial
 
         self.best_mse, self.best_params = self.study.best_trial.value, self.study.best_trial.params

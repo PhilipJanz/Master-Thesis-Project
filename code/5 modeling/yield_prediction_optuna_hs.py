@@ -1,4 +1,5 @@
 import os
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
@@ -8,13 +9,16 @@ import pandas as pd
 import pickle
 from sklearn.preprocessing import StandardScaler
 
-from cluster_functions import load_cluster_data
+#from cluster_functions import load_cluster_data
 from config import PROCESSED_DATA_DIR, RESULTS_DATA_DIR
 from feature_sets_for_optuna import feature_location_dict
 from models import model_ls, model_param_grid_ls
 from data_assembly import process_feature_df, process_list_of_feature_df, make_adm_column, make_X, make_dummies
 from loyocv import loyocv, loyocv_parallel, loyocv_grid_search, nested_loyocv
 #from soil.soil_functions import load_soil_data
+
+from optuna_hypersearch import OptunaOptimizer
+import optuna
 
 """
 This script is the final script that brings together all processed data to make groundbreaking yield predictions.
@@ -42,7 +46,7 @@ yield_df = make_adm_column(yield_df)
 cc_df = pd.read_csv(PROCESSED_DATA_DIR / f"crop calendar/my_crop_calendar.csv", keep_default_na=False) # load_my_cc()
 
 # load and process features
-length = 1
+length = 10
 processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df, feature_dict=feature_location_dict,
                                                        length=length, start_before_sos=30, end_before_eos=60)
 
@@ -55,7 +59,7 @@ soil_df = soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'so
 soil_df.iloc[:, :] = StandardScaler().fit_transform(soil_df.values)
 
 # load clusters
-cluster_df = load_cluster_data()
+cluster_df = pd.read_csv(PROCESSED_DATA_DIR / f"data clustering/cluster_data.csv", keep_default_na=False) # load_cluster_data()
 yield_df = pd.merge(yield_df, cluster_df, on=["country", "adm1", "adm2"])
 
 
@@ -63,7 +67,7 @@ yield_df = pd.merge(yield_df, cluster_df, on=["country", "adm1", "adm2"])
 
 
 # 1. loop over cluster sets
-for cluster_set in ["adm"]:
+for cluster_set in ["diff_preci-20_cluster"]:
 
     # collect dictionary of best models: {"model_cluster": {"holdout_year_0": Model(), ...}, ...}
     best_model_dict_of_dicts = {}
@@ -88,8 +92,12 @@ for cluster_set in ["adm"]:
 
         X, predictor_names = make_X(df_ls=predictors_list, standardize=True)
 
-        opti = OptunaOptimizer(X, y, years)
-        opti.optimize()
+        sampler = optuna.samplers.TPESampler(n_startup_trials=200, multivariate=True, warn_independent_sampling=False)
+        opti = OptunaOptimizer(X=X, y=y, years=years, predictor_names=predictor_names, sampler=sampler,
+                               model_types=['svr'], num_folds=15)
+
+        opti.optimize(n_trials=1000)
+        break
 
         # determine best hyperparameters and validate performance by using nested-CV
         y_preds, best_model_dict = nested_loyocv(X=X, y=y,

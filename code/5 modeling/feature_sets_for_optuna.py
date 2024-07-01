@@ -22,10 +22,16 @@ preci_set = ["pr-max", "si-preci-sum", "pr-belowP01", "pr-aboveP99"]
 
 temp_set = ["min-temp-median", "max-temp-median", "si-temp-median", "min-temp-belowP01", "max-temp-aboveP99"]
 
+abs_set = ["ndvi", "pr-max", "min-temp-median", "max-temp-median"]
+
+rel_set = ["si-ndvi", "si-preci-sum", "pr-belowP01", "pr-aboveP99", "si-temp-median", "min-temp-belowP01", "max-temp-aboveP99"]
+
 soil_set = ['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']
 
 # feature sets to be trained on
 feature_sets = {"soil": soil_set,
                 "ndvi": ndvi_feature_set,
                 "preci": preci_set,
-                "temp": temp_set}
+                "temp": temp_set,
+                "abs": abs_set,
+                "rel": rel_set}
