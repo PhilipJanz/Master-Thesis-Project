@@ -52,7 +52,7 @@ class OptunaOptimizer:
                  sampler=optuna.samplers.TPESampler,
                  num_folds=5,
                  repetition_per_fold=1,
-                 global_seed=42):
+                 seed=42):
         # init
         self.X = X
         self.y = y
@@ -61,8 +61,8 @@ class OptunaOptimizer:
         self.feature_set_selection = feature_set_selection
         self.model_types = model_types
         self.num_folds = num_folds
+        self.seed = seed
         self.repetition_per_fold = repetition_per_fold
-        self.global_seed = global_seed
         self.feature_set_selection = feature_set_selection
         self.feature_len_shrinking = feature_len_shrinking
 
@@ -91,12 +91,16 @@ class OptunaOptimizer:
             X_sel = self.X.copy()
 
         if self.feature_len_shrinking:
+            # get remaining features that are time series (those which need to get shrinked)
             ts_features = np.unique(["_".join(x.split("_")[:-1]) for x in self.predictor_names[predictor_selection_bool] if x.split("_")[-1].isdigit()])
 
+            # make bool array for featues that will be shrinked (to replace them later with new_X)
             transformed_feature_columns = np.repeat(False, X_sel.shape[1])
+            # list of shrinked features that will replace the old X later
             new_X = []
 
             for ts_feature in ts_features:
+                # define feature length
                 feature_len = trial.suggest_int(ts_feature + '_len', 1, 10)
 
                 ts_feature_loc = np.array([ts_feature in name for name in self.predictor_names[predictor_selection_bool]])
@@ -155,7 +159,7 @@ class OptunaOptimizer:
 
         # shrink number of folds if wanted else make loyoCV
         if self.num_folds < len(np.unique(self.years)):
-            folds = group_years(years=self.years, n=self.num_folds)
+            folds = group_years(years=self.years, n=self.num_folds, seed=self.seed)
         else:
             folds = self.years.copy()
 
@@ -205,9 +209,9 @@ class OptunaOptimizer:
         return np.mean(mse_ls)
 
     def optimize(self, timeout=600, n_trials=100,
-                   n_jobs=-1, show_progress_bar=True, gc_after_trial=True, print_result=True):
+                   n_jobs=-1, show_progress_bar=True, print_result=True):
         self.study.optimize(self.objective, n_trials=n_trials, timeout=timeout,
-                            n_jobs=n_jobs, show_progress_bar=show_progress_bar) # TODO , gc_after_trial=gc_after_trial
+                            n_jobs=n_jobs, show_progress_bar=show_progress_bar)
 
         self.best_mse, self.best_params = self.study.best_trial.value, self.study.best_trial.params
 
@@ -222,3 +226,16 @@ class OptunaOptimizer:
 
         # return (best models mse, best models params
         return self.best_mse, self.best_params
+
+    def apply(self, X, y, years, predictor_names):
+        """
+        This method applies the best parameters (found by optimization) to any dataset of X and y
+        :param X: 2D np.array with predictors
+        :param y: np.array of yields
+        :param years: np.array of harvest years
+        :param predictor_names: labels for the columns of X
+        :return: tran_X, y_pred
+        """
+        pass
+
+

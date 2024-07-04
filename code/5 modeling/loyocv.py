@@ -173,9 +173,15 @@ def loyocv_grid_search(X, y, years, model, param_grid, folds=None, print_result=
     return grid_search.best_estimator_, np.abs(grid_search.best_score_)
 
 
-def group_years(years, n):
+def group_years(years, n, seed=None):
     unique_years = list(set(years))
-    random.shuffle(unique_years)
+
+    # Set the random seed if provided
+    if seed is not None:
+        rng = random.Random(seed)
+        rng.shuffle(unique_years)
+    else:
+        random.shuffle(unique_years)
 
     # Create groups and distribute unique values randomly
     groups = defaultdict(list)

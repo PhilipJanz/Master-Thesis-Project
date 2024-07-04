@@ -39,14 +39,18 @@ There are two main loops:
 # LOAD & PREPROCESS ############
 
 # load yield data and benchmark
-yield_df = pd.read_csv(RESULTS_DATA_DIR / f"benchmark/yield_benchmark_prediction.csv", keep_default_na=False)
+#yield_df = pd.read_csv(RESULTS_DATA_DIR / f"benchmark/yield_benchmark_prediction.csv", keep_default_na=False)
+yield_df = pd.read_csv(PROCESSED_DATA_DIR / "yield/processed_comb_yield.csv", keep_default_na=False)
+yield_df = yield_df[~yield_df.country.isin(["Ethiopia", "Kenya"])]
+yield_df = yield_df[yield_df.harv_year > 2001]
+yield_df.sort_values(["country", "adm1", "adm2", "harv_year"], inplace=True, ignore_index=True)
 yield_df = make_adm_column(yield_df)
 
 # load crop calendar (CC)
 cc_df = pd.read_csv(PROCESSED_DATA_DIR / f"crop calendar/my_crop_calendar.csv", keep_default_na=False) # load_my_cc()
 
 # load and process features
-length = 10
+length = 1
 processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df, feature_dict=feature_location_dict,
                                                        length=length, start_before_sos=30, end_before_eos=60)
 
@@ -67,7 +71,7 @@ yield_df = pd.merge(yield_df, cluster_df, on=["country", "adm1", "adm2"])
 
 
 # 1. loop over cluster sets
-for cluster_set in ["diff_preci-20_cluster"]:
+for cluster_set in ["preci-20_cluster"]:
 
     # collect dictionary of best models: {"model_cluster": {"holdout_year_0": Model(), ...}, ...}
     best_model_dict_of_dicts = {}
@@ -79,11 +83,11 @@ for cluster_set in ["diff_preci-20_cluster"]:
     # 2. loop over cluster
     for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         # define target and year
-        y = cluster_yield_df["yield"]
+        y = cluster_yield_df["yield_anomaly"]
         years = cluster_yield_df.harv_year
 
-        # prepare predictors
-        predictors_list = [cluster_yield_df.harv_year] + [df.loc[cluster_yield_df.index] for df in processed_feature_df_dict.values()]
+        # prepare predictors [cluster_yield_df.harv_year] +
+        predictors_list = [df.loc[cluster_yield_df.index] for df in processed_feature_df_dict.values()]
 
         # add dummies for regions
         if cluster_yield_df.adm.nunique() > 1:
@@ -92,11 +96,11 @@ for cluster_set in ["diff_preci-20_cluster"]:
 
         X, predictor_names = make_X(df_ls=predictors_list, standardize=True)
 
-        sampler = optuna.samplers.TPESampler(n_startup_trials=200, multivariate=True, warn_independent_sampling=False)
+        sampler = optuna.samplers.TPESampler(n_startup_trials=100, multivariate=True, warn_independent_sampling=False)
         opti = OptunaOptimizer(X=X, y=y, years=years, predictor_names=predictor_names, sampler=sampler,
-                               model_types=['svr'], num_folds=15)
+                               model_types=['rf'], feature_len_shrinking=False, num_folds=5, seed=43)
 
-        opti.optimize(n_trials=1000)
+        opti.optimize(n_trials=1000, timeout=600)
         break
 
         # determine best hyperparameters and validate performance by using nested-CV
