@@ -90,6 +90,12 @@ class OptunaOptimizer:
         else:
             X_sel = self.X.copy()
 
+        # it might happen that each and every feature is filtered out. in that case we are left with the naive average predictor:
+        if X_sel.shape[1] == 0:
+            # mse of average predictor is the variance
+            return np.var(self.y)
+
+
         if self.feature_len_shrinking:
             # get remaining features that are time series (those which need to get shrinked)
             ts_features = np.unique(["_".join(x.split("_")[:-1]) for x in self.predictor_names[predictor_selection_bool] if x.split("_")[-1].isdigit()])
@@ -230,12 +236,62 @@ class OptunaOptimizer:
     def apply(self, X, y, years, predictor_names):
         """
         This method applies the best parameters (found by optimization) to any dataset of X and y
+        trains the optimal model and exports the model as well as the transformed X
         :param X: 2D np.array with predictors
         :param y: np.array of yields
         :param years: np.array of harvest years
         :param predictor_names: labels for the columns of X
-        :return: tran_X, y_pred
+        :return: X_trans, y_pred, trained_model
         """
-        pass
 
+        X_trans = self.transform_X(X=X, predictor_names=predictor_names)
 
+        return X_trans, 1, 1
+
+    def transform_X(self, X, predictor_names):
+        # create list of bools representing predictors from X to keep
+        predictor_selection_bool = np.repeat(True, self.X.shape[1])
+
+        if self.feature_set_selection:
+            # Select True / False for each feature
+            feature_set_selection_bool = [self.best_params[feature_set] for feature_set in feature_sets]
+
+            # list names of features not selected to filter them out
+            left_out_feature_sets = [name for name, selected in zip(feature_sets, feature_set_selection_bool) if not selected]
+
+            # set predictors False when they were not selected
+            for left_out_feature_set in left_out_feature_sets:
+                left_out_features = feature_sets[left_out_feature_set]
+                predictor_selection_bool = predictor_selection_bool * [np.all([x not in predictor for x in left_out_features]) for predictor in predictor_names]
+
+            # make new X with selected feature sets
+            X_sel = X[:, predictor_selection_bool]
+        else:
+            X_sel = X.copy()
+
+        assert X_sel.shape[1] > 0, "There are no features left after selection."
+
+        if self.feature_len_shrinking:
+            # get remaining features that are time series (those which need to get shrinked)
+            ts_features = np.unique(["_".join(x.split("_")[:-1]) for x in self.predictor_names[predictor_selection_bool] if x.split("_")[-1].isdigit()])
+
+            # make bool array for featues that will be shrinked (to replace them later with X_new)
+            transformed_feature_columns = np.repeat(False, X_sel.shape[1])
+            # list of shrinked features that will replace the old X later
+            X_new = []
+
+            for ts_feature in ts_features:
+                # define feature length
+                feature_len = self.best_params[ts_feature + "_len"]
+
+                ts_feature_loc = np.array([ts_feature in name for name in predictor_names[predictor_selection_bool]])
+                transformed_feature_columns = transformed_feature_columns + ts_feature_loc
+
+                if feature_len == 1:
+                    X_new.append(np.mean(X_sel[:, ts_feature_loc], 1).reshape(-1, 1))
+                else:
+                    X_new.append(rescale_array(X_sel[:, ts_feature_loc], feature_len))
+            X_new.append(X_sel[:, ~transformed_feature_columns])
+            X_tran = np.hstack(X_new)
+
+            return X_tran

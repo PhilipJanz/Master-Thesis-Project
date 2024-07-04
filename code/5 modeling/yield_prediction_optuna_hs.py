@@ -50,7 +50,7 @@ yield_df = make_adm_column(yield_df)
 cc_df = pd.read_csv(PROCESSED_DATA_DIR / f"crop calendar/my_crop_calendar.csv", keep_default_na=False) # load_my_cc()
 
 # load and process features
-length = 1
+length = 10
 processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df, feature_dict=feature_location_dict,
                                                        length=length, start_before_sos=30, end_before_eos=60)
 
@@ -71,7 +71,7 @@ yield_df = pd.merge(yield_df, cluster_df, on=["country", "adm1", "adm2"])
 
 
 # 1. loop over cluster sets
-for cluster_set in ["preci-20_cluster"]:
+for cluster_set in ["country"]:
 
     # collect dictionary of best models: {"model_cluster": {"holdout_year_0": Model(), ...}, ...}
     best_model_dict_of_dicts = {}
@@ -83,11 +83,11 @@ for cluster_set in ["preci-20_cluster"]:
     # 2. loop over cluster
     for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         # define target and year
-        y = cluster_yield_df["yield_anomaly"]
+        y = cluster_yield_df["yield"]
         years = cluster_yield_df.harv_year
 
-        # prepare predictors [cluster_yield_df.harv_year] +
-        predictors_list = [df.loc[cluster_yield_df.index] for df in processed_feature_df_dict.values()]
+        # prepare predictors # [cluster_yield_df.harv_year] +
+        predictors_list = [cluster_yield_df.harv_year] + [df.loc[cluster_yield_df.index] for df in processed_feature_df_dict.values()]
 
         # add dummies for regions
         if cluster_yield_df.adm.nunique() > 1:
@@ -95,13 +95,15 @@ for cluster_set in ["preci-20_cluster"]:
             predictors_list.append(soil_df.loc[cluster_yield_df.index])
 
         X, predictor_names = make_X(df_ls=predictors_list, standardize=True)
-
-        sampler = optuna.samplers.TPESampler(n_startup_trials=100, multivariate=True, warn_independent_sampling=False)
-        opti = OptunaOptimizer(X=X, y=y, years=years, predictor_names=predictor_names, sampler=sampler,
-                               model_types=['rf'], feature_len_shrinking=False, num_folds=5, seed=43)
-
-        opti.optimize(n_trials=1000, timeout=600)
         break
+
+        sampler = optuna.samplers.TPESampler(n_startup_trials=50, multivariate=True, warn_independent_sampling=False) #
+        opti = OptunaOptimizer(X=X, y=y, years=years, predictor_names=predictor_names, sampler=sampler,
+                               model_types=["svr"], feature_len_shrinking=True, num_folds=5, seed=43)
+
+        opti.optimize(n_trials=5000, timeout=40)
+
+        X_trans, _, _ = opti.apply(X=X, y=y, years=years, predictor_names=predictor_names)
 
         # determine best hyperparameters and validate performance by using nested-CV
         y_preds, best_model_dict = nested_loyocv(X=X, y=y,
