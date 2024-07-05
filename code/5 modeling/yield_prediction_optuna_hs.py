@@ -41,9 +41,6 @@ There are two main loops:
 # load yield data and benchmark
 #yield_df = pd.read_csv(RESULTS_DATA_DIR / f"benchmark/yield_benchmark_prediction.csv", keep_default_na=False)
 yield_df = pd.read_csv(PROCESSED_DATA_DIR / "yield/processed_comb_yield.csv", keep_default_na=False)
-yield_df = yield_df[~yield_df.country.isin(["Ethiopia", "Kenya"])]
-yield_df = yield_df[yield_df.harv_year > 2001]
-yield_df.sort_values(["country", "adm1", "adm2", "harv_year"], inplace=True, ignore_index=True)
 yield_df = make_adm_column(yield_df)
 
 # load crop calendar (CC)
@@ -71,10 +68,12 @@ yield_df = pd.merge(yield_df, cluster_df, on=["country", "adm1", "adm2"])
 
 
 # 1. loop over cluster sets
-for cluster_set in ["country"]:
+for cluster_set in ["adm"]:
 
-    # collect dictionary of best models: {"model_cluster": {"holdout_year_0": Model(), ...}, ...}
-    best_model_dict_of_dicts = {}
+    # collect dictionary of best models: {"cluster_hold-out-year": {...}, ...}
+    best_model_dict = {}
+    # as well as a dictionary of best model parameters: {"cluster_hold-out-year": {...}, ...}
+    best_model_param_dict = {}
 
     # columns to be filled with predictions
     yield_df["y_pred"] = np.nan
@@ -83,7 +82,7 @@ for cluster_set in ["country"]:
     # 2. loop over cluster
     for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         # define target and year
-        y = cluster_yield_df["yield"]
+        y = cluster_yield_df["yield_anomaly"]
         years = cluster_yield_df.harv_year
 
         # prepare predictors # [cluster_yield_df.harv_year] +
@@ -94,29 +93,40 @@ for cluster_set in ["country"]:
             predictors_list.append(make_dummies(cluster_yield_df))
             predictors_list.append(soil_df.loc[cluster_yield_df.index])
 
+        # form the regressor-matrix X
         X, predictor_names = make_X(df_ls=predictors_list, standardize=True)
-        break
 
-        sampler = optuna.samplers.TPESampler(n_startup_trials=50, multivariate=True, warn_independent_sampling=False) #
-        opti = OptunaOptimizer(X=X, y=y, years=years, predictor_names=predictor_names, sampler=sampler,
-                               model_types=["svr"], feature_len_shrinking=True, num_folds=5, seed=43)
+        # LOYOCV - leave one year out cross validation
+        for year_out in np.unique(years):
+            year_out_bool = (years == year_out)
 
-        opti.optimize(n_trials=5000, timeout=40)
+            # splitt the data
+            X_train, y_train = X[~year_out_bool], y[~year_out_bool]
+            X_test, y_test = X[year_out_bool], y[year_out_bool]
 
-        X_trans, _, _ = opti.apply(X=X, y=y, years=years, predictor_names=predictor_names)
+            # make feature-, model- and hyperparameter-selection using optuna
+            sampler = optuna.samplers.TPESampler(n_startup_trials=200, multivariate=True, warn_independent_sampling=False)
+            opti = OptunaOptimizer(X=X, y=y, years=years, predictor_names=predictor_names, sampler=sampler,
+                                   model_types=["lasso"],
+                                   feature_set_selection=True, feature_len_shrinking=True, num_folds=20, seed=42)
 
-        # determine best hyperparameters and validate performance by using nested-CV
-        y_preds, best_model_dict = nested_loyocv(X=X, y=y,
-                                                 years=cluster_yield_df.harv_year,
-                                                 model=model,
-                                                 param_grid=model_param_grid_ls[model_name],
-                                                 folds=5,
-                                                 print_result=True)
+            mse, best_params = opti.optimize(n_trials=5000, timeout=6, show_progress_bar=False, print_result=False)
 
-        # write the predictions into the result df
-        yield_df.loc[cluster_yield_df.index, model_name + "_pred"] = y_preds
+            # train best model
+            X_train_trans, trained_model = opti.train_best_model(X=X_train, y=y_train, predictor_names=predictor_names)
 
-        best_model_dict_of_dicts[f"{model_name}_{cluster_name}"] = best_model_dict
+            # prepare test-data
+            X_test_trans = opti.transform_X(X=X_test, predictor_names=predictor_names)
+
+            # predict test-data
+            y_pred = trained_model.predict(X_test_trans)
+
+            # write the predictions into the result df
+            yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = y_pred
+
+            # save trained model and best params
+            best_model_dict[f"{cluster_name}_{year_out}"] = trained_model
+            best_model_param_dict[f"{cluster_name}_{year_out}"] = best_params
 
         best_feature_set_mtx.append(best_feature_set_ls)
 
