@@ -134,28 +134,34 @@ def init_model(X, model_name, trial=None, params=None):
     # Define model parameters
     if model_name == 'svr':
         if trial:
-            params = {
+            model_params = {
                 'C': trial.suggest_float('C', 1e-7, 100.0, log=True),
                 'epsilon': trial.suggest_float('epsilon', 1e-5, 10.0, log=True),
                 'gamma': trial.suggest_categorical('gamma', ['scale', 'auto']),
                 'kernel': trial.suggest_categorical('kernel', ['linear', 'poly', 'rbf', 'sigmoid'])
             }
-        return SVR(**params), params
+        else:
+            model_params = {key: params[key] for key in ["C", "epsilon", "gamma", "kernel"]}
+        return SVR(**model_params), model_params
     elif model_name == 'rf':
         if trial:
-            params = {
+            model_params = {
                 'n_estimators': trial.suggest_int('n_estimators', 10, 500),
                 'max_depth': trial.suggest_int('max_depth', 1, 20),
                 'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
                 'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 20)
             }
-        return RandomForestRegressor(**params), params
+        else:
+            model_params = {key: params[key] for key in ["n_estimators", "max_depth", "min_samples_split", "min_samples_leaf"]}
+        return RandomForestRegressor(**model_params), model_params
     elif model_name == 'lasso':
         if trial:
-            params = {
+            model_params = {
                 'alpha': trial.suggest_float('alpha', 1e-9, 100.0, log=True)
             }
-        return Lasso(**params), params
+        else:
+            model_params = {"alpha": params["alpha"]}
+        return Lasso(**model_params), model_params
     elif model_name == 'nn':
         if trial:
             params = {
@@ -167,7 +173,7 @@ def init_model(X, model_name, trial=None, params=None):
             return create_nn(params=params, input_shape=X.shape[1]), params
     elif model_name == 'xgb':
         if trial:
-            params = {
+            model_params = {
                 'n_estimators': trial.suggest_int('n_estimators', 50, 500),
                 'max_depth': trial.suggest_int('max_depth', 1, 20),
                 'learning_rate': trial.suggest_float('learning_rate', 1e-5, 0.1, log=True),
@@ -177,7 +183,9 @@ def init_model(X, model_name, trial=None, params=None):
                 'reg_alpha': trial.suggest_float('reg_alpha', 1e-9, 100.0, log=True),
                 'reg_lambda': trial.suggest_float('reg_lambda', 1e-9, 100.0, log=True)
             }
-        return XGBRegressor(**params), params
+        else:
+            model_params = {key: params[key] for key in ["n_estimators", "max_depth", "learning_rate", "subsample", 'colsample_bytree', 'gamma', 'reg_alpha', 'reg_lambda']}
+        return XGBRegressor(**model_params), model_params
     else:
         raise AssertionError(f"Model name '{model_name}' is not in: ['svr', 'rf', 'lasso', 'nn']")
 
@@ -333,13 +341,13 @@ class OptunaOptimizer:
         # Fit the model and diffrentiate between the model classes
         if self.best_params["model_type"] == 'nn':
             # Train the Keras model
-            model.fit(X, y,
+            model.fit(X_trans, y,
                       epochs=self.best_params["epochs"],
                       batch_size=self.best_params["batch_size"],
                       verbose=0)
         else:
             # Fit the model
-            model.fit(X, y)
+            model.fit(X_trans, y)
 
         return X_trans, model
 

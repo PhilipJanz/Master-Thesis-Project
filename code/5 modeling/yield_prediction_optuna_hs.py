@@ -110,13 +110,13 @@ for cluster_set in ["adm"]:
                                    model_types=["lasso"],
                                    feature_set_selection=True, feature_len_shrinking=True, num_folds=20, seed=42)
 
-            mse, best_params = opti.optimize(n_trials=5000, timeout=6, show_progress_bar=False, print_result=False)
+            mse, best_params = opti.optimize(n_trials=5000, timeout=60, show_progress_bar=False, print_result=False)
 
             # train best model
             X_train_trans, trained_model = opti.train_best_model(X=X_train, y=y_train, predictor_names=predictor_names)
 
             # prepare test-data
-            X_test_trans = opti.transform_X(X=X_test, predictor_names=predictor_names)
+            X_test_trans = opti.transform_X(X=X_test, predictor_names=predictor_names, params=opti.best_params)
 
             # predict test-data
             y_pred = trained_model.predict(X_test_trans)
@@ -128,7 +128,8 @@ for cluster_set in ["adm"]:
             best_model_dict[f"{cluster_name}_{year_out}"] = trained_model
             best_model_param_dict[f"{cluster_name}_{year_out}"] = best_params
 
-        best_feature_set_mtx.append(best_feature_set_ls)
+        break
+        np.nanmean((yield_df["y_pred"] - yield_df["yield_anomaly"]) ** 2)
 
     # save results!
     yield_df.to_csv(RESULTS_DATA_DIR / f"yield_predictions/{cluster_set}_classic_modeling.csv", index=False)
