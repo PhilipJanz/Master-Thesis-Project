@@ -8,7 +8,7 @@ from maps.map_functions import merge_regions, plot_region_map
 """
 The following code prepares a geopandas dataframe that delivers geometric data (shapely.geometry.multipolygon.MultiPolygon)
 that represents the map of a certain area. 
-The areas of interest are determined by the availability of yield data. See code/3 preprocessing/yield_/main.py for 
+The areas of interest are determined by the availability of yield data. See code/3_preprocessing/yield_/main.py for 
 generating the file available_admin.csv that will be used here.
 """
 

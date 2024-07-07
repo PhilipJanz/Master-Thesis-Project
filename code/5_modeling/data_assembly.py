@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
+import random
 
 from sklearn.preprocessing import StandardScaler
 
@@ -183,3 +183,30 @@ def make_X_y(df, dummies=True, include_year=True, features=None):
     # multiplying by a large number means the coeeficient can be very small and wont have any weight for the penelization term
     #X_df["harv_year"] = X_df["harv_year"] * 1e6
     return X, y, years, column_names
+
+
+def group_years(years, n, seed=None):
+    unique_years = list(set(years))
+
+    # Set the random seed if provided
+    if seed is not None:
+        rng = random.Random(seed)
+        rng.shuffle(unique_years)
+    else:
+        random.shuffle(unique_years)
+
+    # Create groups and distribute unique values randomly
+    groups = defaultdict(list)
+    for i, year in enumerate(unique_years):
+        groups[i % n].append(year)
+
+    # Map values to their groups
+    year_to_group = {}
+    for group_number, group_year in groups.items():
+        for year in group_year:
+            year_to_group[year] = group_number
+
+    # Create the final output list with the same length as the input list
+    grouped_years = [year_to_group[year] for year in years]
+
+    return np.array(grouped_years)

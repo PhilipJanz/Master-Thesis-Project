@@ -10,7 +10,7 @@ from sklearn.ensemble import RandomForestRegressor
 from config import PROCESSED_DATA_DIR, RESULTS_DATA_DIR
 from crop_calendar.crop_calendar_functions import load_my_cc
 from cv_grid_search import cv_grid_search, loyocv_grid_search
-from models import param_grid_rf
+from grid_search_modeling.models import param_grid_rf
 from data_assembly import process_feature_df
 from loyocv import loyocv, loyocv_parallel
 

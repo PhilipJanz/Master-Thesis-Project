@@ -7,7 +7,9 @@ Specify feature sets and their location
 feature_location_dict = {"ndvi": "remote sensing/smooth_ndvi_regional_matrix.csv",
                          "si-ndvi": "remote sensing/si_smooth_ndvi_regional_matrix.csv",
                          "preci-max": "climate/pr_max_regional_matrix.csv",
+                         "preci-sum": "climate/pr_sum_regional_matrix.csv",
                          "si-preci-sum": "climate/si_pr_sum_regional_matrix.csv",
+                         "preci-cdd": "climate/pr_cddMax_regional_matrix.csv",
                          "preci-belowP01": "climate/pr_belowP01_regional_matrix.csv",
                          "preci-aboveP99": "climate/pr_aboveP99_regional_matrix.csv",
                          "si-temp-median": "climate/si_tas_median_regional_matrix.csv",
@@ -15,8 +17,6 @@ feature_location_dict = {"ndvi": "remote sensing/smooth_ndvi_regional_matrix.csv
                          "max-temp-median": "climate/tasmax_median_regional_matrix.csv",
                          "min-temp-belowP01": "climate/tasmin_belowP01_regional_matrix.csv",
                          "max-temp-aboveP99": "climate/tasmax_aboveP99_regional_matrix.csv"}
-                         #"preci-sum": "climate/pr_sum_regional_matrix.csv",
-                         #"preci-cdd": "climate/pr_cddMax_regional_matrix.csv",
 
 ndvi_feature_set = ["ndvi", "si-ndvi"]
 
@@ -37,5 +37,10 @@ feature_sets = {"year": ["harv_year"],
                 "preci": preci_set,
                 "temp": temp_set,
                 }
-                #"abs": abs_set,
-                #"rel": rel_set,
+
+# test if all features are mentioned properly. Typos can happen ;)
+for feature_set_name, feature_set in feature_sets.items():
+    if feature_set_name in ["soil", "year"]:
+        continue
+    for feature in feature_set:
+        assert feature in feature_location_dict.keys(), f"Feature '{feature}' without location reference."

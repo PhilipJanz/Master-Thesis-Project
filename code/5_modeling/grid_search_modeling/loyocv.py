@@ -22,6 +22,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 
+from data_assembly import group_years
 from models import create_nn
 from training import train_and_predict
 
@@ -171,30 +172,3 @@ def loyocv_grid_search(X, y, years, model, param_grid, folds=None, print_result=
 
     # Use the best model
     return grid_search.best_estimator_, np.abs(grid_search.best_score_)
-
-
-def group_years(years, n, seed=None):
-    unique_years = list(set(years))
-
-    # Set the random seed if provided
-    if seed is not None:
-        rng = random.Random(seed)
-        rng.shuffle(unique_years)
-    else:
-        random.shuffle(unique_years)
-
-    # Create groups and distribute unique values randomly
-    groups = defaultdict(list)
-    for i, year in enumerate(unique_years):
-        groups[i % n].append(year)
-
-    # Map values to their groups
-    year_to_group = {}
-    for group_number, group_year in groups.items():
-        for year in group_year:
-            year_to_group[year] = group_number
-
-    # Create the final output list with the same length as the input list
-    grouped_years = [year_to_group[year] for year in years]
-
-    return np.array(grouped_years)

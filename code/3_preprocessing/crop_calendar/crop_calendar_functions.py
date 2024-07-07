@@ -378,7 +378,3 @@ def fit_polynomial(days, values, degree):
     fitted_values = poly(days)
 
     return days, fitted_values
-
-
-def load_my_cc():
-    return pd.read_csv(PROCESSED_DATA_DIR / f"crop calendar/my_crop_calendar.csv", keep_default_na=False)

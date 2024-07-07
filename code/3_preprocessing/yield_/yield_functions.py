@@ -395,8 +395,3 @@ def clean_pipeline(yield_df,
         yield_df = yield_df[~too_little_data]
 
     return yield_df
-
-
-def load_yield_data():
-    return pd.read_csv(PROCESSED_DATA_DIR / "yield/processed_comb_yield.csv", keep_default_na=False)
-

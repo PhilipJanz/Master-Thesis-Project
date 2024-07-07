@@ -6,6 +6,8 @@ SOURCE_DATA_DIR = DATA_DIR / 'raw_source'
 PROCESSED_DATA_DIR = DATA_DIR / 'processed'
 RESULTS_DATA_DIR = DATA_DIR / 'modeling_results'
 
+RUN_DIR = RESULTS_DATA_DIR / 'yield_predictions'
+
 # colors
 TANZANIA_COLOR = "#2ca02c"
 ZAMBIA_COLOR = "#9467bd"

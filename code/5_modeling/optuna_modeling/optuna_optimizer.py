@@ -6,7 +6,6 @@ from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Lasso
 from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import KFold
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Input
 from tensorflow.keras.optimizers import Adam
@@ -14,9 +13,8 @@ from tensorflow.keras.optimizers import Adam
 from xgboost import XGBRegressor
 
 from config import RESULTS_DATA_DIR
-from data_assembly import rescale_array
-from feature_sets_for_optuna import feature_sets
-from loyocv import group_years
+from data_assembly import rescale_array, group_years
+from optuna_modeling.feature_sets_for_optuna import feature_sets
 
 
 def create_nn(input_shape, trial=None, params=None):
@@ -69,18 +67,23 @@ def select_features(X, predictor_names, trial=None, params=None):
     # create list of bools representing predictors from X to keep
     predictor_selection_bool = np.repeat(True, X.shape[1])
 
+    # filter feature-set list to the feature-sets that are actually in the data (e.g. soil is missing for region model)
+    relevant_feature_sets = feature_sets.copy()
+    if "clay" not in predictor_names:
+        del relevant_feature_sets["soil"]
+
     # Select True / False for each feature or get it from params
     if trial:
-        feature_set_selection_bool = [trial.suggest_categorical(name, [True, False]) for name in feature_sets]
+        feature_set_selection_bool = [trial.suggest_categorical(name, [True, False]) for name in relevant_feature_sets]
     else:
-        feature_set_selection_bool = [params[name] for name in feature_sets]
+        feature_set_selection_bool = [params[name] for name in relevant_feature_sets]
 
     # list names of features not selected to filter them out
-    left_out_feature_sets = [name for name, selected in zip(feature_sets, feature_set_selection_bool) if not selected]
+    left_out_feature_sets = [name for name, selected in zip(relevant_feature_sets, feature_set_selection_bool) if not selected]
 
     # set predictors False when they were not selected
     for left_out_feature_set in left_out_feature_sets:
-        left_out_features = feature_sets[left_out_feature_set]
+        left_out_features = relevant_feature_sets[left_out_feature_set]
         predictor_selection_bool = predictor_selection_bool * [np.all([x not in predictor for x in left_out_features]) for predictor in predictor_names]
 
     # make new X with selected feature sets
@@ -236,7 +239,6 @@ class OptunaOptimizer:
         # Create a new Optuna study
         self.study = optuna.create_study(direction="minimize", sampler=sampler)
 
-
     def objective(self, trial):
 
         # prepare X: feature selection & feature shrinking
@@ -280,9 +282,9 @@ class OptunaOptimizer:
                 if model_name == 'nn':
                     # Train the Keras model
                     model_copy.fit(X_train, y_train,
-                              epochs=params["epochs"],
-                              batch_size=params["batch_size"],
-                              verbose=0)
+                                   epochs=params["epochs"],
+                                   batch_size=params["batch_size"],
+                                   verbose=0)
 
                     # Predict the target values
                     preds = model_copy.predict(X_val, verbose=0).flatten()

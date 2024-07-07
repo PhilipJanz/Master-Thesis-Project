@@ -41,7 +41,3 @@ def load_soilgrid(target_crs, target_width, target_height):
             soil_nutrient_maps.append(soil_nutrient_map)
 
     return soil_nutrient_maps, soil_nutrients
-
-
-def load_soil_data():
-    return pd.read_csv(PROCESSED_DATA_DIR / "soil/soil_property_region_level.csv", keep_default_na=False)
