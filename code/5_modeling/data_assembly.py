@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import random
+from collections import defaultdict
 
 from sklearn.preprocessing import StandardScaler
 
@@ -144,7 +145,7 @@ def rescale_array(arr, new_length):
 
     elif arr.ndim == 2:
         num_rows, num_cols = arr.shape
-        if new_length == num_cols:
+        if new_length >= num_cols:
             return arr
 
         rescaled_arr = np.zeros((num_rows, new_length))

@@ -2,10 +2,12 @@ from copy import deepcopy
 
 import optuna
 import numpy as np
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Lasso
 from sklearn.metrics import mean_squared_error
+from sklearn.utils._testing import ignore_warnings
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Input
 from tensorflow.keras.optimizers import Adam
@@ -104,13 +106,14 @@ def shrink_features(X, predictor_names, trial=None, params=None):
     transformed_feature_columns = np.repeat(False, X.shape[1])
     # list of sharnk features that will replace the old X later
     X_shrink = []
+    new_predictor_names = []
 
     for ts_feature in ts_features:
         if trial:
             # define feature length
-            feature_len = trial.suggest_int(ts_feature + '_len', 1, 10, log=True) - 1
+            feature_len = trial.suggest_int(ts_feature + '_len', 0, 10)
         else:
-            feature_len = params[ts_feature + '_len'] - 1
+            feature_len = params[ts_feature + '_len']
 
         if feature_len == 0:
             continue
@@ -122,12 +125,14 @@ def shrink_features(X, predictor_names, trial=None, params=None):
             X_shrink.append(np.mean(X[:, ts_feature_loc], 1).reshape(-1, 1))
         else:
             X_shrink.append(rescale_array(X[:, ts_feature_loc], feature_len))
+        new_predictor_names.extend([f"{ts_feature}_{i + 1}" for i in range(feature_len)])
     X_shrink.append(X[:, ~transformed_feature_columns])
+    new_predictor_names.extend(predictor_names[~transformed_feature_columns])
     X_shrink = np.hstack(X_shrink)
 
     # TODO: make new predictor names
 
-    return X_shrink
+    return X_shrink, new_predictor_names
 
 
 def init_model(X, model_name, trial=None, params=None):
@@ -239,10 +244,11 @@ class OptunaOptimizer:
         # Create a new Optuna study
         self.study = optuna.create_study(direction="minimize", sampler=sampler)
 
+    @ignore_warnings(category=ConvergenceWarning)
     def objective(self, trial):
 
         # prepare X: feature selection & feature shrinking
-        X_trans = self.transform_X(X=self.X, predictor_names=self.predictor_names, trial=trial)
+        X_trans, _ = self.transform_X(X=self.X, predictor_names=self.predictor_names, trial=trial)
 
         # It might happen that each and every feature is filtered out.
         # In that case we are left with the naive average predictor:
@@ -320,6 +326,7 @@ class OptunaOptimizer:
         # return (best models mse, best models params
         return self.best_mse, self.best_params
 
+    @ignore_warnings(category=ConvergenceWarning)
     def train_best_model(self, X, y, predictor_names):
         """
         This method applies the best parameters (found by optimization) to any dataset of X and y
@@ -333,7 +340,7 @@ class OptunaOptimizer:
         assert self.best_params, ".apply() applies optimal parameters that are found by .optimize() or by setting them: self.best_params = {...}"
 
         # transform X
-        X_trans = self.transform_X(X=X, predictor_names=predictor_names, params=self.best_params)
+        X_trans, new_predictor_names = self.transform_X(X=X, predictor_names=predictor_names, params=self.best_params)
 
         assert X_trans.shape[1] > 0, "There are no features left after selection & shrinking."
 
@@ -351,7 +358,7 @@ class OptunaOptimizer:
             # Fit the model
             model.fit(X_trans, y)
 
-        return X_trans, model
+        return X_trans, new_predictor_names, model
 
     def transform_X(self, X, predictor_names, trial=None, params=None):
         # check if inputs are reasonable: xor on trial and params
@@ -370,10 +377,11 @@ class OptunaOptimizer:
         # Feature Shrinking
         if self.feature_len_shrinking:
             if trial:
-                X_trans = shrink_features(X=X_sel, predictor_names=sel_predictor_names, trial=trial)
+                X_trans, new_predictor_names = shrink_features(X=X_sel, predictor_names=sel_predictor_names, trial=trial)
             else:
-                X_trans = shrink_features(X=X_sel, predictor_names=sel_predictor_names, params=self.best_params)
+                X_trans, new_predictor_names = shrink_features(X=X_sel, predictor_names=sel_predictor_names, params=self.best_params)
         else:
             X_trans = X_sel
+            new_predictor_names = predictor_names
 
-        return X_trans
+        return X_trans, new_predictor_names
