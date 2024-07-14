@@ -84,9 +84,6 @@ k = 20
 labels, _ = kmean_cluster(data_mtx=season_diff_preci_profile_mtx, n_clusters=k)
 cc_df[f"diff_preci-{k}_cluster"] = labels
 
-for cluster_name = season_profile_mtx in zip[season_ndvi_profile_mtx, season_diff_ndvi_profile_mtx, season_preci_profile_mtx, season_diff_preci_profile_mtx]:
-    for k in[5, 20]:
-
 
 # PLOT #####
 

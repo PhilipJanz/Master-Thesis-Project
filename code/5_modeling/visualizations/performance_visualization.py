@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 import pandas as pd
 
 from config import RESULTS_DATA_DIR
+from optuna_modeling.run import open_run
 from visualizations.visualization_functions import plot_performance_map
 
 """
@@ -17,50 +18,33 @@ Additionally it plots the performance as map (for each admin) and charts.
 
 # find data
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
-pred_result_files = [x for x in os.listdir(pred_result_dir) if (".csv" in x)]
+print(os.listdir(pred_result_dir))
 
-# read data and print performance for each df and model
-pred_result_df_ls = []
-performance_df_ls = []
-for pred_result_file in pred_result_files:
-    #print(pred_result_file[:-4])
+run_name = '0714_adm_lasso_1_10_100'
+run = open_run(run_name=run_name)
 
-    # read data
-    pred_result_df = pd.read_csv(pred_result_dir / pred_result_file, keep_default_na=False)
+yield_df = run.load_prediction()
+result_df = yield_df[yield_df["y_pred"] != ""]
+result_df["y_pred"] = pd.to_numeric(result_df["y_pred"])
 
-    # calc MSE for each model
-    pred_columns = [col for col in pred_result_df.columns if col[-4:] == "pred"]
-    for col in pred_columns:
-        mse = np.mean((pred_result_df[col] - pred_result_df["yield"]) ** 2)
-        #print(f"{col[:-5]} MSE: {np.round(mse, 3)} \n")
+performance_dict = {"adm": [], "mse": [], "nse": []}
+for adm, adm_results_df in result_df.groupby("adm"):
 
-    pred_result_df_ls.append(pred_result_df)
+    mse = np.mean((adm_results_df["y_pred"] - adm_results_df["yield_anomaly"]) ** 2)
 
-    performance_dict = {"adm": [], "best_model": [], "bench_mse": [], "mse": [], "nse": []}
-    for adm, adm_results_df in pred_result_df.groupby("adm"):
-        mse_ls = []
-        for col in pred_columns:
-            mse = np.mean((adm_results_df[col] - adm_results_df["yield"]) ** 2)
-            mse_ls.append(mse)
+    #best_model = pred_columns[np.argmin(mse_ls)][:-5]
+    best_nse = 1 - mse / np.var(adm_results_df["yield_anomaly"])
 
-        # calc metrics
-        bench_mse = np.mean((adm_results_df["bench_lin_reg"] - adm_results_df["yield"]) ** 2)
-        best_model = pred_columns[np.argmin(mse_ls)][:-5]
-        best_mse = np.min(mse_ls)
-        best_nse = 1 - best_mse / np.var(adm_results_df["yield"])
+    # fill dict
+    performance_dict["adm"].append(adm)
+    #performance_dict["best_model"].append(best_model)
+    performance_dict["mse"].append(mse)
+    performance_dict["nse"].append(best_nse)
 
-        # fill dict
-        performance_dict["adm"].append(adm)
-        performance_dict["best_model"].append(best_model)
-        performance_dict["bench_mse"].append(bench_mse)
-        performance_dict["mse"].append(best_mse)
-        performance_dict["nse"].append(best_nse)
+performance_df = pd.DataFrame(performance_dict)
 
-    performance_df = pd.DataFrame(performance_dict)
-    performance_df_ls.append(performance_df)
+# print performance
+print(run_name, "avg NSE:", np.round(np.mean(performance_dict["nse"]), 2))
 
-    # print performance
-    print(pred_result_file[:-4], "avg NSE:", np.round(np.mean(performance_dict["nse"]), 2))
-
-    # plot results as a map
-    plot_performance_map(performance_data=performance_df, performance_column="nse", result_filename=pred_result_file[:-4])
+# plot results as a map
+plot_performance_map(performance_data=performance_df, performance_column="nse", result_filename=run_name)

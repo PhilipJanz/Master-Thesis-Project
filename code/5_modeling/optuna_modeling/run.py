@@ -71,7 +71,7 @@ class Run:
 
         # fill performance dict for each admin
         for adm, adm_prediction_df in prediction_df.groupby("adm"):
-            for col in ['country', 'adm1', 'adm2', cluster_set]:
+            for col in list({'country', 'adm1', 'adm2', cluster_set}):
                 performance_dict[col].append(adm_prediction_df[col].iloc[0])
 
             performance_dict["avg_opt_trials"].append(np.mean(adm_prediction_df["n_opt_trials"]))

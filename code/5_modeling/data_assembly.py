@@ -89,7 +89,7 @@ def process_feature_df(yield_df, cc_df, feature_df, length, feature_name, start_
         processed_feature_mtx.append(season_values)
 
     if length == 1:
-        return pd.DataFrame(processed_feature_mtx, columns=[feature_name + "_" + "mean"])
+        return pd.DataFrame(processed_feature_mtx, columns=[feature_name + "_1"])
     elif length == "mmm":
         return pd.DataFrame(processed_feature_mtx, columns=[feature_name + "_" + str(i) for i in ["max", "mean", "min"]])
     else:

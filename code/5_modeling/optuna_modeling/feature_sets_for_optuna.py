@@ -44,3 +44,8 @@ for feature_set_name, feature_set in feature_sets.items():
         continue
     for feature in feature_set:
         assert feature in feature_location_dict.keys(), f"Feature '{feature}' without location reference."
+
+
+# TODO del
+
+#feature_location_dict = {"si-ndvi": "remote sensing/si_smooth_ndvi_regional_matrix.csv"}

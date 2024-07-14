@@ -41,6 +41,6 @@ def plot_performance_map(performance_data, performance_column, result_filename):
                      horizontalalignment='center', fontsize=4, color="black")
 
     # Save the plot
-    plt.savefig(RESULTS_DATA_DIR / f"yield_predictions/plots/performance/{result_filename}_{performance_column}_map.jpg", dpi=1200)
+    plt.savefig(RESULTS_DATA_DIR / f"yield_predictions/{result_filename}/plots/overall/nse_map.jpg", dpi=1200)
 
     plt.show()

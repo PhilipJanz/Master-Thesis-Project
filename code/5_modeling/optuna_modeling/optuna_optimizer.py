@@ -11,6 +11,7 @@ from sklearn.utils._testing import ignore_warnings
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Input
 from tensorflow.keras.optimizers import Adam
+import tensorflow as tf
 
 from xgboost import XGBRegressor
 
@@ -95,46 +96,6 @@ def select_features(X, predictor_names, trial=None, params=None):
     return X_sel, sel_predictor_names
 
 
-def shrink_features(X, predictor_names, trial=None, params=None):
-    # check if inputs are reasonable: xor on trial and params
-    assert (not trial) ^ (not params), "Choose either params OR give an optuna trial (it's xor)"
-
-    # get remaining features that are time series (those which need to get sharnk)
-    ts_features = np.unique(["_".join(x.split("_")[:-1]) for x in predictor_names if x.split("_")[-1].isdigit()])
-
-    # make bool array for featues that will be shrinked (to replace them later with X_shrink)
-    transformed_feature_columns = np.repeat(False, X.shape[1])
-    # list of sharnk features that will replace the old X later
-    X_shrink = []
-    new_predictor_names = []
-
-    for ts_feature in ts_features:
-        if trial:
-            # define feature length
-            feature_len = trial.suggest_int(ts_feature + '_len', 0, 10)
-        else:
-            feature_len = params[ts_feature + '_len']
-
-        if feature_len == 0:
-            continue
-
-        ts_feature_loc = np.array([ts_feature in name for name in predictor_names])
-        transformed_feature_columns = transformed_feature_columns + ts_feature_loc
-
-        if feature_len == 1:
-            X_shrink.append(np.mean(X[:, ts_feature_loc], 1).reshape(-1, 1))
-        else:
-            X_shrink.append(rescale_array(X[:, ts_feature_loc], feature_len))
-        new_predictor_names.extend([f"{ts_feature}_{i + 1}" for i in range(feature_len)])
-    X_shrink.append(X[:, ~transformed_feature_columns])
-    new_predictor_names.extend(predictor_names[~transformed_feature_columns])
-    X_shrink = np.hstack(X_shrink)
-
-    # TODO: make new predictor names
-
-    return X_shrink, new_predictor_names
-
-
 def init_model(X, model_name, trial=None, params=None):
     # check if inputs are reasonable: xor on trial and params
     assert (not trial) ^ (not params), "Choose either params OR give an optuna trial (it's xor)"
@@ -184,15 +145,14 @@ def init_model(X, model_name, trial=None, params=None):
             model_params = {
                 'n_estimators': trial.suggest_int('n_estimators', 50, 500),
                 'max_depth': trial.suggest_int('max_depth', 1, 20),
-                'learning_rate': trial.suggest_float('learning_rate', 1e-5, 0.1, log=True),
+                'eta': trial.suggest_float('learning_rate', 1e-5, 1, log=True),
                 'subsample': trial.suggest_float('subsample', 0.5, 1.0),
                 'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
                 'gamma': trial.suggest_float('gamma', 0, 5),
-                'reg_alpha': trial.suggest_float('reg_alpha', 1e-9, 100.0, log=True),
-                'reg_lambda': trial.suggest_float('reg_lambda', 1e-9, 100.0, log=True)
+                'lambda': trial.suggest_float('lambda', 1e-9, 100.0, log=True)
             }
         else:
-            model_params = {key: params[key] for key in ["n_estimators", "max_depth", "learning_rate", "subsample", 'colsample_bytree', 'gamma', 'reg_alpha', 'reg_lambda']}
+            model_params = {key: params[key] for key in ["n_estimators", "max_depth", "learning_rate", "subsample", 'colsample_bytree', 'gamma', 'lambda']}
         return XGBRegressor(**model_params), model_params
     else:
         raise AssertionError(f"Model name '{model_name}' is not in: ['svr', 'rf', 'lasso', 'nn']")
@@ -222,6 +182,7 @@ class OptunaOptimizer:
                  best_params=None,
                  feature_set_selection=True,
                  feature_len_shrinking=True,
+                 max_feature_len=10,
                  model_types=['svr', 'rf', 'lasso', 'nn', 'xgb'],
                  sampler=optuna.samplers.TPESampler,
                  num_folds=5,
@@ -240,6 +201,7 @@ class OptunaOptimizer:
         self.repetition_per_fold = repetition_per_fold
         self.feature_set_selection = feature_set_selection
         self.feature_len_shrinking = feature_len_shrinking
+        self.max_feature_len = max_feature_len
 
         # Create a new Optuna study
         self.study = optuna.create_study(direction="minimize", sampler=sampler)
@@ -252,7 +214,7 @@ class OptunaOptimizer:
 
         # It might happen that each and every feature is filtered out.
         # In that case we are left with the naive average predictor:
-        if X_trans.shape[1] == 0:
+        if len(X_trans) == 0:
             # mse of average predictor is the variance
             return np.var(self.y)
 
@@ -275,7 +237,7 @@ class OptunaOptimizer:
             for fold_out in np.unique(folds):
                 # some models have memory, so we need to train copies of the model in each fold
                 if model_name == "nn":
-                    model_copy
+                    model_copy, _ = init_model(X=X_trans, model_name=model_name, trial=trial)
                 else:
                     model_copy = deepcopy(model)
 
@@ -377,11 +339,52 @@ class OptunaOptimizer:
         # Feature Shrinking
         if self.feature_len_shrinking:
             if trial:
-                X_trans, new_predictor_names = shrink_features(X=X_sel, predictor_names=sel_predictor_names, trial=trial)
+                X_trans, new_predictor_names = self.shrink_features(X=X_sel, predictor_names=sel_predictor_names, trial=trial)
             else:
-                X_trans, new_predictor_names = shrink_features(X=X_sel, predictor_names=sel_predictor_names, params=self.best_params)
+                X_trans, new_predictor_names = self.shrink_features(X=X_sel, predictor_names=sel_predictor_names, params=self.best_params)
         else:
             X_trans = X_sel
-            new_predictor_names = predictor_names
+            new_predictor_names = sel_predictor_names
 
         return X_trans, new_predictor_names
+
+    def shrink_features(self, X, predictor_names, trial=None, params=None):
+        # check if inputs are reasonable: xor on trial and params
+        assert (not trial) ^ (not params), "Choose either params OR give an optuna trial (it's xor)"
+
+        # get remaining features that are time series (those which need to get sharnk)
+        ts_features = np.unique(["_".join(x.split("_")[:-1]) for x in predictor_names if x.split("_")[-1].isdigit()])
+
+        # make bool array for featues that will be shrinked (to replace them later with X_shrink)
+        transformed_feature_columns = np.repeat(False, X.shape[1])
+        # list of sharnk features that will replace the old X later
+        X_shrink = []
+        new_predictor_names = []
+
+        for ts_feature in ts_features:
+            ts_feature_loc = np.array([ts_feature in name for name in predictor_names])
+            transformed_feature_columns = transformed_feature_columns + ts_feature_loc
+
+            if trial:
+                # define feature length
+                feature_len = trial.suggest_int(ts_feature + '_len', 0, np.min([self.max_feature_len, sum(ts_feature_loc)]))
+            else:
+                feature_len = params[ts_feature + '_len']
+
+            if feature_len == 0:
+                continue
+
+            if feature_len == 1:
+                X_shrink.append(np.mean(X[:, ts_feature_loc], 1).reshape(-1, 1))
+            else:
+                X_shrink.append(rescale_array(X[:, ts_feature_loc], feature_len))
+            new_predictor_names.extend([f"{ts_feature}_{i + 1}" for i in range(feature_len)])
+        if np.any(~transformed_feature_columns):
+            X_shrink.append(X[:, ~transformed_feature_columns])
+            new_predictor_names.extend(predictor_names[~transformed_feature_columns])
+        if len(X_shrink) >= 1:
+            X_shrink = np.hstack(X_shrink)
+        else:
+            X_shrink = np.array([])
+
+        return X_shrink, new_predictor_names

@@ -313,7 +313,7 @@ def clean_pipeline(yield_df,
                    group_columns = ["country", "adm1", "adm2", "season"],
                    min_area = 1000,
                    max_yield = 10,
-                   min_datapoints = 5,
+                   min_datapoints = 7,
                    plot=False
                    ):
     """
