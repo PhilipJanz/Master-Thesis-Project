@@ -11,7 +11,8 @@ import seaborn as sns
 
 from crop_calendar.crop_calendar_functions import detect_seasons
 from crop_calendar.profile_generation import make_profiles
-#from maps.map_functions import load_africa_map, load_aoi_map
+from maps.map_functions import load_africa_map, load_aoi_map
+
 
 OMP_NUM_THREADS = 1
 
@@ -222,8 +223,12 @@ def plot_cluster_map(cluster_data, cluster_column, cluster_name):
     # fusion with cluster data
     geo_cluster_data = pd.merge(aoi_map, cluster_data, on=["country", "adm1", "adm2"])
 
-    # Define a colormap
-    cmap = plt.get_cmap('tab10')  # 'tab20' has 20 distinct colors
+    if cluster_data[cluster_column].nunique() <= 10:
+        # Define a colormap
+        cmap = plt.get_cmap('tab10')  # 'tab20' has 20 distinct colors
+    else:
+        # Define a colormap
+        cmap = plt.get_cmap('tab20')  # 'tab20' has 20 distinct colors
 
     # start plotting
     fig, ax = plt.subplots(figsize=(10, 12))

@@ -149,10 +149,11 @@ def init_model(X, model_name, trial=None, params=None):
                 'subsample': trial.suggest_float('subsample', 0.5, 1.0),
                 'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
                 'gamma': trial.suggest_float('gamma', 0, 5),
-                'lambda': trial.suggest_float('lambda', 1e-9, 100.0, log=True)
+                'alpha': trial.suggest_float('alpha', 1e-9, 100.0, log=True)
             }
         else:
-            model_params = {key: params[key] for key in ["n_estimators", "max_depth", "learning_rate", "subsample", 'colsample_bytree', 'gamma', 'lambda']}
+            model_params = {key: params[key] for key in ["n_estimators", "max_depth", "learning_rate", "subsample", 'colsample_bytree', 'gamma', "alpha"]}
+        model_params["lambda"] = 0
         return XGBRegressor(**model_params), model_params
     else:
         raise AssertionError(f"Model name '{model_name}' is not in: ['svr', 'rf', 'lasso', 'nn']")

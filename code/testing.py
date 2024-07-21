@@ -127,3 +127,9 @@ corr_df = pd.DataFrame(corr_mtx, columns=feature_ls, index=adm_ls)
 corr_df.mean()
 xy = pd.DataFrame({"rolling new": corr_df.mean(), "rolling": roll_corr_df.mean(), "quadratic": quad_corr_df.mean(), "linear": old_corr_df.mean()}, index=corr_df.columns).transpose()
 
+
+
+kmean_elbow(data_mtx=corr_df_imputed.iloc[:, :10], max_k=41)
+labels, _ = kmean_cluster(data_mtx=corr_df_imputed.iloc[:, :10], n_clusters=20)
+yield_df = pd.merge(yield_df, pd.DataFrame({"adm": corr_df.index, "corr_cluster_20": labels}), on="adm")
+

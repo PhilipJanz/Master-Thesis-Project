@@ -31,11 +31,11 @@ rel_set = ["si-ndvi", "si-preci-sum", "pr-belowP01", "pr-aboveP99", "si-temp-med
 soil_set = ['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']
 
 # feature sets to be trained on
-feature_sets = {"year": ["harv_year"],
+feature_sets = {"year": [" harv_year"],
                 "soil": soil_set,
-                "ndvi": ndvi_feature_set,
-                "preci": preci_set,
-                "temp": temp_set,
+                #"ndvi": ndvi_feature_set,
+                #"preci": preci_set,
+                #"temp": temp_set,
                 }
 
 # test if all features are mentioned properly. Typos can happen ;)

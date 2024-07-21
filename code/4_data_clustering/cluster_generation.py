@@ -4,9 +4,8 @@ import pandas as pd
 from config import PROCESSED_DATA_DIR
 from cluster_functions import calculate_yield_correlations, kmean_elbow, kmean_cluster, make_profiles, \
     plot_cluster_profiles, plot_cluster_map, cluster_validation_plot, save_cluster_data, make_cc
-from crop_calendar.crop_calendar_functions import load_my_cc
+from data_loader import load_my_cc, load_yield_data
 from maps.map_functions import load_aoi_map
-from yield_.yield_functions import load_yield_data
 
 """
 This script clusters all available regions in groups that will be trained on.

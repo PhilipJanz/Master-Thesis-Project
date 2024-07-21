@@ -1,5 +1,11 @@
 import os
 
+from mlxtend.feature_selection import SequentialFeatureSelector
+from scipy.stats import kendalltau
+
+from config import PROCESSED_DATA_DIR
+from feature_selection import feature_selection_vif, backwards_feature_selection
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
@@ -15,65 +21,6 @@ from data_assembly import process_list_of_feature_df, make_adm_column, make_X, m
 from optuna_modeling.run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer import OptunaOptimizer
 import optuna
-
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-
-
-def calculate_vif(X, feature_names):
-    """
-    Calculate the Variance Inflation Factor (VIF) for each feature.
-
-    Parameters:
-    X : ndarray or DataFrame
-        The matrix of features.
-    feature_names : list
-        The list of feature names.
-
-    Returns:
-    DataFrame
-        DataFrame containing the VIF values for each feature.
-    """
-    if isinstance(X, np.ndarray):
-        X = pd.DataFrame(X, columns=feature_names)
-
-    vif_data = pd.DataFrame()
-    vif_data['Feature'] = X.columns
-    vif_data['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
-
-    return vif_data
-
-
-def feature_selection_vif(X, feature_names, threshold=5.0):
-    """
-    Perform feature selection based on VIF.
-
-    Parameters:
-    X : ndarray or DataFrame
-        The matrix of features.
-    feature_names : list
-        The list of feature names.
-    threshold : float, optional
-        The VIF threshold for removing features (default is 5.0).
-
-    Returns:
-    ndarray, list
-        The reduced feature matrix and the list of selected feature names.
-    """
-    if isinstance(X, np.ndarray):
-        X = pd.DataFrame(X, columns=feature_names)
-
-    while True:
-        vif_data = calculate_vif(X.values, X.columns)
-        max_vif = vif_data['VIF'].max()
-
-        if max_vif > threshold:
-            drop_feature = vif_data.loc[vif_data['VIF'].idxmax(), 'Feature']
-            X = X.drop(columns=[drop_feature])
-        else:
-            break
-
-    return X.values, X.columns.tolist()
-
 
 # silence the message after each trial
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -113,6 +60,10 @@ processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=
                                                        length=length,
                                                        start_before_sos=30, end_before_eos=60)
 
+#x = pd.concat(processed_feature_df_dict.values(), axis=1)
+#x.to_csv(PROCESSED_DATA_DIR / "xy/x.csv", index=False)
+#yield_df.to_csv(PROCESSED_DATA_DIR / "xy/y.csv", index=False)
+
 corr_mtx = []
 adm_ls = []
 for cluster_name, cluster_yield_df in yield_df.groupby("adm"):
@@ -121,7 +72,10 @@ for cluster_name, cluster_yield_df in yield_df.groupby("adm"):
     for feature, processed_feature_df in processed_feature_df_dict.items():
         for feature_num in processed_feature_df.columns:
             feature_values = processed_feature_df.loc[cluster_yield_df.index, feature_num].values
-            corr = np.corrcoef(np.vstack([feature_values, cluster_yield_df["yield_anomaly"].values]))[0, 1]
+            #corr = np.corrcoef(np.vstack([feature_values, cluster_yield_df["yield_anomaly"].values]))[0, 1]
+            corr, p_value = kendalltau(feature_values, cluster_yield_df["yield_anomaly"].values)
+            if p_value > .2:
+                corr = np.nan
             corr_ls.append(corr)
             feature_ls.append(feature_num)
     corr_mtx.append(corr_ls)
@@ -147,7 +101,8 @@ yield_df = pd.merge(yield_df, cluster_df, how="left") # , on=["country", "adm1",
 # INITIALIZATION #######################################################################################################
 
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
-cluster_set = "adm"
+#yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
+cluster_set = "adm1"
 assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
 
 # choose model or set of models that are used
@@ -155,12 +110,12 @@ model_types = ["xgb"]
 # choose max feature len for feature shrinking
 max_feature_len = 1
 # choose duration (sec) of optimization using optuna
-opti_duration = 60
+opti_duration = 240
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
-n_startup_trials = 20
+n_startup_trials = 50
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0714_{cluster_set}_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}"
+run_name = f"0721_{cluster_set}_vif2_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -187,6 +142,9 @@ else:
 # INFERENCE ############################################################################################################
 
 for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
+    if "Tanzania" in cluster_yield_df["country"].values:
+        continue
+
     # in case you loaded an existing run, you can skip the clusters already predicted
     if np.all(~cluster_yield_df["y_pred"].isna()):
         continue
@@ -195,7 +153,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
     y = cluster_yield_df["yield_anomaly"]
     years = cluster_yield_df.harv_year
 
-    # prepare predictors #
+    # prepare predictors # [cluster_yield_df.harv_year] +
     predictors_list = [cluster_yield_df.harv_year] + [df.loc[cluster_yield_df.index] for df in
                                                       processed_feature_df_dict.values()]
 
@@ -204,9 +162,9 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         predictors_list.append(soil_df.loc[cluster_yield_df.index])
         predictors_list.append(make_dummies(cluster_yield_df))
     # form the regressor-matrix X
-    X, predictor_names = make_X(df_ls=predictors_list, standardize=True)
+    X, feature_names = make_X(df_ls=predictors_list, standardize=True)
 
-    # filter fetures of X
+    # filter features of X
     #selected_features = ['harv_year', 'si-ndvi_1'] # , 'preci-max_1'
     #selected_features_loc = [feat in selected_features for feat in predictor_names]
     #X = X[:, selected_features_loc]
@@ -218,43 +176,100 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         #    break
         year_out_bool = (years == year_out)
 
-        # splitt the data
+        # split the data
         X_train, y_train, years_train = X[~year_out_bool], y[~year_out_bool], years[~year_out_bool]
         X_test, y_test = X[year_out_bool], y[year_out_bool]
 
+        selected_feature_ix = np.repeat(True, len(feature_names))
+        indicator_feature_ls = []
+        for i, feature in enumerate(feature_names):
+            if not np.any([feature_name in feature for feature_name in list(processed_feature_df_dict.keys())]):
+                continue
+            corr, p_value = kendalltau(X_train[:, i], y_train)
+            if p_value > 1.05:
+                selected_feature_ix[i] = False
+            else:
+                selected_feature_ix[i] = True
+                indicator_feature_ls.append(feature)
+
+        """
+        if not indicator_feature_ls:
+            # in this case just output 0 as the best estimator for yield anomaly in that scenario
+            yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
+            yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
+            yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.var(y_train)
+            yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = 0
+            continue
+
+        corr_selected_feature_names = feature_names[selected_feature_ix]
+        X_train = X_train[:, selected_feature_ix]
+        X_test = X_test[:, selected_feature_ix]
+        """
+        corr_selected_feature_names = feature_names
+
+        # backward selection feature selection
+        #X_train, selected_feature_names, fs = backwards_feature_selection(X=X_train, y=y_train,
+        #                                                                  feature_names=selected_feature_names)
+        #X_test = fs.transform(X_test)
+
+        # filter by correlation with yield
+        #corrs = np.corrcoef(np.vstack([X_train.T, y_train]))[:-1, -1]
+        #interesting_features = predictor_names[np.abs(corrs) >= 0.3]
+        #X_train = X_train[:, [name in interesting_features for name in predictor_names]]
+        #X_test = X_test[:, [name in interesting_features for name in predictor_names]]
+
+        # check if features are left
+        #if len(interesting_features) == 0:
+        #    # in this case just output 0 as the best estimator for yield anomaly in that scenario
+        #    yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
+        #    yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
+        #    yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.var(y_train)
+        #    yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
+        #    continue
+
         # vif
-        X_train, selected_feature_names = feature_selection_vif(X_train, predictor_names, threshold=5)
-        X_test = X_test[:, [name in selected_feature_names for name in predictor_names]]
+        indicator_feature_ix = np.array([feature in indicator_feature_ls for feature in corr_selected_feature_names])
+        X_vif, vif_selected_feature_names = feature_selection_vif(X_train[:, indicator_feature_ix],
+                                                                  corr_selected_feature_names[indicator_feature_ix],
+                                                                  threshold=2)
+        X_train = np.hstack([X_vif, X_train[:, ~np.array(indicator_feature_ix)]])
+        selected_feature_names = np.array(vif_selected_feature_names + list(corr_selected_feature_names[~indicator_feature_ix]))
+        X_test = X_test[:, [name in selected_feature_names for name in corr_selected_feature_names]]
+        indicator_feature_ix = np.concatenate([np.repeat(True, len(vif_selected_feature_names)),
+                                               np.repeat(False, sum(~indicator_feature_ix))])
+        print(cluster_name, year_out, "selected features: ", selected_feature_names, "\nvar(y_train)=", np.var(y_train))
 
         # make feature-, model- and hyperparameter-selection using optuna
         sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True, warn_independent_sampling=False)
         opti = OptunaOptimizer(X=X_train, y=y_train, years=years_train, predictor_names=selected_feature_names,
                                sampler=sampler,
                                model_types=run.model_types,
-                               feature_set_selection=False, feature_len_shrinking=False,
+                               feature_set_selection=True, feature_len_shrinking=False,
                                max_feature_len=max_feature_len, num_folds=20, seed=42)
 
         mse, best_params = opti.optimize(n_trials=100000, timeout=run.opti_duration,
                                          show_progress_bar=True, print_result=False)
 
-        # train best model
-        X_train_trans, new_predictor_names = opti.transform_X(X=X_train, predictor_names=selected_feature_names, params=opti.best_params)
-
-        # check if features are left and parameter are != 0
-        if len(X_train_trans) == 0:
-            # in this case just output 0 as the best estimator for yield anomaly in that scenario
-            yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
-            yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
-            yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.var(y_train)
-            yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
-            continue
 
         # train best model
-        X_train_trans, new_predictor_names, trained_model = opti.train_best_model(X=X_train, y=y_train,
+        #X_train_trans, new_predictor_names = opti.transform_X(X=X_train, predictor_names=selected_feature_names, params=opti.best_params)
+
+        # train best model
+        X_train_trans, optuna_selected_feature_names, trained_model = opti.train_best_model(X=X_train, y=y_train,
                                                                                   predictor_names=selected_feature_names)
 
+        if opti.best_params["model_type"] == "xgb":
+
+            indicator_feature_ls = [sel_feature for sel_feature in optuna_selected_feature_names if np.any([feature in sel_feature for feature in list(processed_feature_df_dict.keys())])]
+            if not indicator_feature_ls:
+                # in this case just output 0 as the best estimator for yield anomaly in that scenario
+                yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
+                yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
+                yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.var(y_train)
+                yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
+                continue
         if opti.best_params["model_type"] == "lasso":
-            if np.all(trained_model.coef_[new_predictor_names != "harv_year"] == 0):
+            if np.all(trained_model.coef_[optuna_selected_feature_names != "harv_year"] == 0):
                 # in this case just output 0 as the best estimator for yield anomaly in that scenario
                 yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
                 yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
@@ -276,7 +291,8 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
 
         # save trained model and best params
-        trained_model.predictor_names = new_predictor_names
+        trained_model.feature_names = optuna_selected_feature_names
+        opti.best_params["feature_names"] = optuna_selected_feature_names
         run.save_model_and_params(name=f"{cluster_name}_{year_out}", model=trained_model, params=opti.best_params)
 
         """

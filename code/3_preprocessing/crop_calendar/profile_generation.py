@@ -5,7 +5,6 @@ import pandas as pd
 from scipy.optimize import curve_fit
 
 from config import PROCESSED_DATA_DIR
-from yield_.yield_functions import load_yield_data
 
 
 def make_profiles(data_df):
