@@ -20,7 +20,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '0720_adm1__vif2_xgb_1_240_50'
+run_name = '0722_adm1_vif2_xgb_1_240_50'
 run = open_run(run_name=run_name)
 
 yield_df = run.load_prediction()

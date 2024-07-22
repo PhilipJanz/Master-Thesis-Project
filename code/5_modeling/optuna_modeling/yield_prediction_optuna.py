@@ -101,8 +101,8 @@ yield_df = pd.merge(yield_df, cluster_df, how="left") # , on=["country", "adm1",
 # INITIALIZATION #######################################################################################################
 
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
-#yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
-cluster_set = "adm1"
+yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
+cluster_set = "adm1_"
 assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
 
 # choose model or set of models that are used
@@ -115,7 +115,7 @@ opti_duration = 240
 n_startup_trials = 50
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0721_{cluster_set}_vif2_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}"
+run_name = f"0722_{cluster_set}_vif2_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -228,15 +228,19 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         #    continue
 
         # vif
-        indicator_feature_ix = np.array([feature in indicator_feature_ls for feature in corr_selected_feature_names])
-        X_vif, vif_selected_feature_names = feature_selection_vif(X_train[:, indicator_feature_ix],
-                                                                  corr_selected_feature_names[indicator_feature_ix],
+        #indicator_feature_ix = np.array([feature in indicator_feature_ls for feature in corr_selected_feature_names])
+        #X_vif, vif_selected_feature_names = feature_selection_vif(X_train[:, indicator_feature_ix],
+        #                                                          corr_selected_feature_names[indicator_feature_ix],
+        #                                                          threshold=2)
+        X_train, vif_selected_feature_names = feature_selection_vif(X_train,
+                                                                  corr_selected_feature_names,
                                                                   threshold=2)
-        X_train = np.hstack([X_vif, X_train[:, ~np.array(indicator_feature_ix)]])
-        selected_feature_names = np.array(vif_selected_feature_names + list(corr_selected_feature_names[~indicator_feature_ix]))
+        #X_train = np.hstack([X_vif, X_train[:, ~np.array(indicator_feature_ix)]])
+        #selected_feature_names = np.array(vif_selected_feature_names + list(corr_selected_feature_names[~indicator_feature_ix]))
+        selected_feature_names = np.array(vif_selected_feature_names)
         X_test = X_test[:, [name in selected_feature_names for name in corr_selected_feature_names]]
-        indicator_feature_ix = np.concatenate([np.repeat(True, len(vif_selected_feature_names)),
-                                               np.repeat(False, sum(~indicator_feature_ix))])
+        #indicator_feature_ix = np.concatenate([np.repeat(True, len(vif_selected_feature_names)),
+        #                                       np.repeat(False, sum(~indicator_feature_ix))])
         print(cluster_name, year_out, "selected features: ", selected_feature_names, "\nvar(y_train)=", np.var(y_train))
 
         # make feature-, model- and hyperparameter-selection using optuna
@@ -244,7 +248,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         opti = OptunaOptimizer(X=X_train, y=y_train, years=years_train, predictor_names=selected_feature_names,
                                sampler=sampler,
                                model_types=run.model_types,
-                               feature_set_selection=True, feature_len_shrinking=False,
+                               feature_set_selection=False, feature_len_shrinking=False,
                                max_feature_len=max_feature_len, num_folds=20, seed=42)
 
         mse, best_params = opti.optimize(n_trials=100000, timeout=run.opti_duration,
