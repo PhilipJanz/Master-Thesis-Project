@@ -64,7 +64,7 @@ def read_malawi_yield():
     malawi_yield_df = raw_yield_df[raw_yield_df.country == "Malawi"].copy()
     #print(len(malawi_yield_df))
     # filtering irrigation season and others
-    malawi_yield_df = malawi_yield_df[malawi_yield_df.crop_production_system == "Rainfed (PS)"]
+    malawi_yield_df = malawi_yield_df[malawi_yield_df.crop_production_system.isin(["Rainfed (PS)", "All (PS)"])]
     malawi_yield_df = malawi_yield_df.rename(columns={"admin_1": "adm1", "admin_2": "adm2", "season_name": "season"})
     malawi_yield_df.loc[malawi_yield_df["adm2"] == "none", "adm2"] = "None"
     malawi_yield_df["harv_year"] = [int(date[:4]) for date in malawi_yield_df.season_date]
@@ -357,9 +357,9 @@ def clean_pipeline(yield_df,
 
     # 4. filter suspicious data (consecutive equal values)
     for group, group_df in yield_df.groupby(group_columns):
-        sus_df = detect_suspicious_data(group_df, column = "yield", threshold=1e-3, plot=False)
+        sus_df = detect_suspicious_data(group_df, column="yield", threshold=1e-3, plot=False)
         if len(sus_df) > 0:
-            detect_suspicious_data(group_df, column = "yield", threshold=1e-3, plot=plot)
+            detect_suspicious_data(group_df, column="yield", threshold=1e-3, plot=plot)
             print(f"Discard {len(sus_df)} suspicious 'yield'-values from {group}.")
             yield_df = yield_df.drop(index=sus_df.index)
 
@@ -388,6 +388,57 @@ def clean_pipeline(yield_df,
                 yield_df = yield_df.drop(index=outlier_df.index)
 
     # 7. filter regions with few datapoints
+    count_datapoints = yield_df.groupby(group_columns).count().reset_index()
+    for _, row in count_datapoints[count_datapoints["yield"] < min_datapoints].iterrows():
+        too_little_data = np.all(yield_df[group_columns] == row[group_columns], axis=1)
+        print(f"Discard {sum(too_little_data)} datapoints from {row[group_columns].values}) due to little number of datapoints in this area.")
+        yield_df = yield_df[~too_little_data]
+
+    return yield_df
+
+
+def clean_pipeline_yield(yield_df,
+                         group_columns=["country", "adm1", "adm2", "season"],
+                         max_yield=10,
+                         min_datapoints = 7,
+                         plot=False
+                         ):
+    """
+
+    :param yield_df: dataframe with yield information
+    :param group_columns: group columns for which each individual has only one yield value per year
+    :param max_yield: filter yield with more than this
+    :param min_datapoints: minimum number of datapoints for one group
+    :param plot: make plots of cleaning steps or not
+    :return:
+    """
+    #assert yield_df.columns == ['country', 'adm1', 'adm2', 'season', 'harv_year', 'area', 'production', 'yield'], "Check your input dataframe. It has not the required columns or unexprected one."
+
+    # 1. filter suspicious data (consecutive equal values)
+    for group, group_df in yield_df.groupby(group_columns):
+        sus_df = detect_suspicious_data(group_df, column="yield", threshold=1e-3, plot=False)
+        if len(sus_df) > 0:
+            detect_suspicious_data(group_df, column="yield", threshold=1e-3, plot=plot)
+            print(f"Discard {len(sus_df)} suspicious 'yield'-values from {group}.")
+            yield_df = yield_df.drop(index=sus_df.index)
+
+    # 2. filter unrealistic high yields (before outlier detection since they distort the search with high variance)
+    unrealistic_yield = yield_df["yield"] >= max_yield
+    if sum(unrealistic_yield):
+        print(f"Discard {sum(unrealistic_yield)} datapoints with unrealistic yields (>= {max_yield} t/ha)")
+        yield_df = yield_df[~unrealistic_yield]
+
+    # 3 filter outliers in yield based on Z-scores and 3-sigma margin
+    for group, group_df in yield_df.groupby(group_columns):
+        outlier_df = detect_outliers_with_polyfit(group_df, column="yield", plot=False)
+        if len(outlier_df) > 0:
+            detect_outliers_with_polyfit(group_df, column="yield", plot=plot)
+            outlier_df = outlier_df[outlier_df.z_score > 0]
+            if len(outlier_df) > 0:
+                print(f"Discard {len(outlier_df)} outliers in 'yield' from {group} with Z-scores of {outlier_df.z_score.values}")
+                yield_df = yield_df.drop(index=outlier_df.index)
+
+    # 4. filter regions with few datapoints
     count_datapoints = yield_df.groupby(group_columns).count().reset_index()
     for _, row in count_datapoints[count_datapoints["yield"] < min_datapoints].iterrows():
         too_little_data = np.all(yield_df[group_columns] == row[group_columns], axis=1)

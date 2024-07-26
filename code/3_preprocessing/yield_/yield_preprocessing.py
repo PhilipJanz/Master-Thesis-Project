@@ -6,7 +6,7 @@ from yield_.yield_functions import *
 from config import *
 
 malawi_yield_df = read_malawi_yield()
-malawi_yield_df = clean_pipeline(malawi_yield_df, plot=False)
+malawi_yield_df = clean_pipeline_yield(malawi_yield_df, group_columns=["country", "adm1", "adm2"], plot=False)
 malawi_yield_df.head()
 
 tanzania_yield_df = read_tanzania_yield()
@@ -30,9 +30,11 @@ for adm, adm_yield_df in comb_df.groupby(["country", "adm1", "adm2"]):
     # make linear and quadratic fit of yield data to capture trends
     X_lin = adm_yield_df["harv_year"].values.reshape(-1, 1)
     X_quad = np.hstack([X_lin, X_lin ** 2])
-    linear_fit = LinearRegression().fit(X=X_lin, y=adm_yield_df["yield"].values).predict(X_lin)
-    quadratic_fit = LinearRegression().fit(X=X_quad, y=adm_yield_df["yield"].values).predict(X_quad)
-    rolling_fit = adm_yield_df["yield"].rolling(window=9, center=True, min_periods=1, win_type='gaussian').mean(std=2)
+    model = LinearRegression()
+    linear_fit = model.fit(X=X_lin, y=adm_yield_df["yield"].values).predict(X_lin)
+    quadratic_fit = model.fit(X=X_quad, y=adm_yield_df["yield"].values).predict(X_quad)
+    n_years = adm_yield_df["harv_year"].nunique()
+    rolling_fit = adm_yield_df["yield"].rolling(window=int(n_years/4), center=False, min_periods=1, win_type='gaussian').mean(std=2)
 
     # calc anomalies
     comb_df.loc[adm_yield_df.index, "rel_yield_anomaly"] = adm_yield_df["yield"] / quadratic_fit

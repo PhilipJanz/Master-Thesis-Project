@@ -28,6 +28,7 @@ def generate_si(folder_path, file_name, min_avg=None):
     si_df = data_df.copy()
 
     for i, row in data_df.iterrows():
+        print(i, end='\r')
         values = row[value_columns].values
         # Convert strings to floats and use None for empty strings
         values = [float(x) if isinstance(x, str) and x else np.nan if x == "" else x for x in values]
@@ -54,8 +55,5 @@ def generate_si(folder_path, file_name, min_avg=None):
             si_df.loc[i, np.array(value_columns)[doy_ix_ls]] = si_values
 
     # save the hard work
-    si_df.to_csv(folder_path / "_".join(["ni", file_name]), index=False)
+    si_df.to_csv(folder_path / "_".join(["si", file_name]), index=False)
     return si_df
-
-
-

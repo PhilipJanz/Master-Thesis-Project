@@ -20,7 +20,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '0722_preci-20_cluster_vif2_xgb_1_600_100'
+run_name = '0726_yield_anomaly_adm1__corrtest05_vif2_xgb_1_60_50_30'
 run = open_run(run_name=run_name)
 
 yield_df = run.load_prediction()

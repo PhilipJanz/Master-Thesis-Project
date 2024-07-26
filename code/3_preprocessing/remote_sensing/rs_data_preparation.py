@@ -62,12 +62,12 @@ for ix, row in adm_map.iterrows():
                                                               data_image=ndvi_image,
                                                               instance_name="NDVI",
                                                               region_name=str(adm_map.loc[ix, ["country", "adm1", "adm2"]].values).replace("'None' ", ""),
-                                                              warn_spread_above=0.1)
+                                                              warn_spread_above=False)
         ndvi_data.loc[ix, date] = weighted_avg_over_crop_mask(crop_mask=regional_crop_mask,
                                                               data_image=evi_image,
                                                               instance_name="EVI",
                                                               region_name=str(adm_map.loc[ix, ["country", "adm1", "adm2"]].values).replace("'None' ", ""),
-                                                              warn_spread_above=0.1)
+                                                              warn_spread_above=False)
 
 
 ### SMOOTHING ###

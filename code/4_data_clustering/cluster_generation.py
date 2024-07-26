@@ -58,28 +58,28 @@ season_diff_preci_profile_mtx = [np.diff(x) for x in season_preci_profile_mtx]
 # make cluster based on smoothed NDVI values
 kmean_elbow(data_mtx=season_ndvi_profile_mtx, max_k=21)
 # choose k
-k = 20
+k = 10
 labels, _ = kmean_cluster(data_mtx=season_ndvi_profile_mtx, n_clusters=k)
 cc_df[f"ndvi-{k}_cluster"] = labels
 
 # make cluster based on diff NDVI values
 kmean_elbow(data_mtx=season_diff_ndvi_profile_mtx, max_k=21)
 # choose k
-k = 20
+k = 6
 labels, _ = kmean_cluster(data_mtx=season_diff_ndvi_profile_mtx, n_clusters=k)
 cc_df[f"diff_ndvi-{k}_cluster"] = labels
 
 # make cluster based on precipitation values
 kmean_elbow(data_mtx=season_preci_profile_mtx, max_k=21)
 # choose k
-k = 20
+k = 10
 labels, _ = kmean_cluster(data_mtx=season_preci_profile_mtx, n_clusters=k)
 cc_df[f"preci-{k}_cluster"] = labels
 
 # make cluster based on diff- precipitation values
 kmean_elbow(data_mtx=season_diff_preci_profile_mtx, max_k=21)
 # choose k
-k = 20
+k = 6
 labels, _ = kmean_cluster(data_mtx=season_diff_preci_profile_mtx, n_clusters=k)
 cc_df[f"diff_preci-{k}_cluster"] = labels
 
@@ -141,5 +141,5 @@ clustered_yield_df = pd.merge(yield_df, cc_df, how="left", on=["country", "adm1"
 # make cluster validation plot for selected clusters
 cluster_validation_plot(clustered_yield_df=clustered_yield_df,
                         correlation_matrix=correlation_matrix,
-                        cluster_columns=["ndvi_cluster", "diff_ndvi_cluster", "preci_cluster", "diff_preci_cluster"],
+                        cluster_columns=[f"ndvi-{k}_cluster", f"diff_ndvi-{k}_cluster", f"preci-{k}_cluster", f"diff_preci-{k}_cluster"],
                         cluster_names=["NDVI", "Diff-NDVI", "Precipitation", "Diff-Precipitation"])

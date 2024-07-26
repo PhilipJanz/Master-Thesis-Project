@@ -22,12 +22,12 @@ adm_map = gpd.read_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp")
 # path to temperature data
 data_path = SOURCE_DATA_DIR / "climate/ERA5"
 country_codes = os.listdir(data_path)
-country_name_dict = {"KEN": "Kenya", "MWI": "Malawi", "TZA": "Tanzania", "ZMB": "Zambia"}
+country_name_dict = {"MWI": "Malawi", "TZA": "Tanzania", "ZMB": "Zambia"}
 
 # Initialization ########
 
 # create a list of selected features for
-selected_features = ["tasmin_median", "tas_median", "tasmax_median", "tasmin_belowP01", "tasmax_aboveP99"]
+selected_features = ["tasmin_median", "tas_median", "tasmax_median", "tasmin_belowP05", "tasmin_belowP01", "tasmax_aboveP95", "tasmax_aboveP99"]
 # create a data-matrix for each of the features to be filled with values in the loops ahead
 data_matrix = make_dekadal_data_matrix(adm_df=adm_map.drop("geometry", axis=1), first_year=1981, last_year=2022)
 data_matrix_dict = {feature: data_matrix.copy() for feature in selected_features}

@@ -24,6 +24,7 @@ tanzania_map["adm2"] = "None"
 tanzania_map = merge_regions(tanzania_map, column="adm1", regions=["Songwe", "Mbeya"], new_region_name="Mbeya")
 print("Check the following regions that were not found in the yield data: ", [region for region in tanzania_map.adm1.values if region not in adm_df.adm1.values])
 
+"""
 # Kenya provides adm1
 kenya_map = gpd.read_file(SOURCE_DATA_DIR / 'admin map/kenya_maps/ken_admbnda_adm1_iebc_20191031.shp')
 kenya_map["country"] = "Kenya"
@@ -31,6 +32,7 @@ kenya_map["adm1"] = kenya_map.ADM1_EN
 kenya_map["adm2"] = "None"
 kenya_map.loc[kenya_map.adm1 == "Tharaka-Nithi", "adm1"] = "Tharaka Nithi"
 print("Check the following regions that were not found in the yield data: ", [region for region in kenya_map.adm1.values if region not in adm_df.adm1.values])
+"""
 
 # Malawi provides adm2
 malawi_map = gpd.read_file(SOURCE_DATA_DIR / 'admin map/malawi_maps/mwi_admbnda_adm2_nso_hotosm_20230405.shp')
@@ -44,6 +46,7 @@ malawi_map = merge_regions(malawi_map, column="adm2", regions=["Zomba City", "Zo
 malawi_map = merge_regions(malawi_map, column="adm2", regions=["Blantyre City", "Blantyre"], new_region_name="Blantyre")
 print("Check the following regions that were not found in the yield data: ", [region for region in malawi_map.adm2.values if region not in adm_df.adm2.values])
 
+"""
 # Ethiopia provides adm2
 ethiopia_map = gpd.read_file(SOURCE_DATA_DIR / 'admin map/ethiopia_maps/eth_admbnda_adm2_csa_bofedb_2021.shp')
 ethiopia_map["country"] = "Ethiopia"
@@ -77,6 +80,7 @@ ethiopia_map = merge_regions(ethiopia_map, column="adm2", regions=["Agnewak", "A
 ethiopia_map = merge_regions(ethiopia_map, column="adm2", regions=["Assosa", "Asosa"], new_region_name="Asosa")
 ethiopia_map = merge_regions(ethiopia_map, column="adm2", regions=["Gamo", "Gofa"], new_region_name="Gamo Gofa")
 print("Check the following regions that were not found in the yield data: ", [region for region in ethiopia_map.adm2.values if region not in adm_df.adm2.values])
+"""
 
 # Zambia provides adm2
 zambia_map = gpd.read_file(SOURCE_DATA_DIR / 'admin map/zambia_maps/zmb_admbnda_adm2_dmmu_20201124.shp')
@@ -130,7 +134,8 @@ print([region for region in zambia_map.adm2.values if region not in adm_df.adm2.
 
 
 #### COMBINING PLOTTING AND SAVING #####
-comb_map = pd.concat([ethiopia_map, tanzania_map, kenya_map, malawi_map, zambia_map])[["country", "adm1", "adm2", "geometry"]]
+comb_map = pd.concat([tanzania_map, malawi_map, zambia_map])[["country", "adm1", "adm2", "geometry"]]
+#comb_map = pd.concat([ethiopia_map, tanzania_map, kenya_map, malawi_map, zambia_map])[["country", "adm1", "adm2", "geometry"]]
 comb_map = pd.merge(comb_map, adm_df, how="right", on=["country", "adm1", "adm2"])
 assert not np.any(comb_map.geometry.isna()), f"There is missing geometry information for: {adm_df[comb_map.geometry.isna()]}"
 

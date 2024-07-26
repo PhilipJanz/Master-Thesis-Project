@@ -55,8 +55,8 @@ def download_image_collection(image_collection, geometry, band, folder):
 geometry = ee.Geometry.Rectangle([22, -18, 48, 15])
 
 # Define the time range
-start_date = '2000-01-01'
-end_date = '2020-12-31'
+start_date = '2021-01-01'
+end_date = '2023-12-31'
 
 # Load the MOD13C1 dataset
 modis = ee.ImageCollection('MODIS/061/MOD13C1').filterDate(start_date, end_date)

@@ -13,11 +13,10 @@ It is based on the same principle like the ASAP CC but is needed because the ASA
 # load administrative boundaries (AOI) with geographic information
 adm_map = load_aoi_map()
 adm_map['centroid'] = adm_map.representative_point()
-adm_map = adm_map[~adm_map.country.isin(["Ethiopia", "Kenya"])]
 
 # load RS data
 ndvi_df = pd.read_csv(PROCESSED_DATA_DIR / "remote sensing/smooth_ndvi_regional_matrix.csv", keep_default_na=False)
-ndvi_df = ndvi_df[~ndvi_df.country.isin(["Ethiopia", "Kenya"])]
+
 # load precipitation data
 preci_df = pd.read_csv(PROCESSED_DATA_DIR / "climate/pr_sum_regional_matrix.csv", keep_default_na=False)
 preci_df = preci_df[~preci_df.country.isin(["Ethiopia", "Kenya"])]

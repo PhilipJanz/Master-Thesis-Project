@@ -6,8 +6,7 @@ from rasterio.enums import Resampling
 from config import *
 
 
-
-def weighted_avg_over_crop_mask(crop_mask, data_image, instance_name, region_name, warn_spread_above):
+def weighted_avg_over_crop_mask(crop_mask, data_image, instance_name, region_name, warn_spread_above=False):
     # again filter crop mask for nan values in the cc data to respect them in the weighted average
     upd_crop_mask = np.where(np.isnan(data_image), np.nan, crop_mask)
 
@@ -23,8 +22,9 @@ def weighted_avg_over_crop_mask(crop_mask, data_image, instance_name, region_nam
 
     # check for big spread inside one region
     quantiles = np.nanquantile(np.where(upd_crop_mask > 0, data_image, np.nan), q=[0.025, 0.975])
-    if quantiles[1] - quantiles[0] > warn_spread_above:
-        print(f'Detected strong divergence in {instance_name} inside region {region_name}. Quant.: {np.round(quantiles, 2)}, weighted avg: ({np.round(weighted_avg, 2)})')
+    if warn_spread_above:
+        if quantiles[1] - quantiles[0] > warn_spread_above:
+            print(f'Detected strong divergence in {instance_name} inside region {region_name}. Quant.: {np.round(quantiles, 2)}, weighted avg: ({np.round(weighted_avg, 2)})')
 
     return weighted_avg
 

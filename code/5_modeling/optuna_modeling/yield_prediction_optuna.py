@@ -48,7 +48,7 @@ There are two main loops:
 
 # load yield data and benchmark
 yield_df = load_yield_data()
-yield_df = yield_df[yield_df.harv_year > 2001].reset_index(drop=True)
+yield_df = yield_df[(yield_df.harv_year > 2001) & (yield_df.harv_year < 2023)].reset_index(drop=True)
 yield_df = make_adm_column(yield_df)
 
 # load crop calendar (CC)
@@ -75,7 +75,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby("adm"):
             feature_values = processed_feature_df.loc[cluster_yield_df.index, feature_num].values
             #corr = np.corrcoef(np.vstack([feature_values, cluster_yield_df["yield_anomaly"].values]))[0, 1]
             corr, p_value = kendalltau(feature_values, cluster_yield_df["yield_anomaly"].values)
-            if p_value > .2:
+            if p_value > .1:
                 corr = np.nan
             corr_ls.append(corr)
             feature_ls.append(feature_num)
@@ -110,24 +110,24 @@ cluster_set = "adm1_"
 assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
 
 # define objective (target)
-objective = "yield"
+objective = "yield_anomaly"
 
 # vif thresgold
-vif_threshold = 5
+vif_threshold = 2
 
 # choose model or set of models that are used
-model_types = ["xgb"]
+model_types = ["svr"]
 # choose max feature len for feature shrinking
 max_feature_len = 1
 # choose duration (sec) of optimization using optuna
-opti_duration = 240
+opti_duration = 10
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
-n_startup_trials = 100
+n_startup_trials = 50
 # folds of optuna hyperparameter search
-num_folds = 20
+num_folds = 30
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0726_{objective}_{cluster_set}_vif{vif_threshold}_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}_{num_folds}"
+run_name = f"0726_{objective}_{cluster_set}_corrtest05_vif{vif_threshold}_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -198,13 +198,13 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
             if not np.any([feature_name in feature for feature_name in list(processed_feature_df_dict.keys())]):
                 continue
             corr, p_value = kendalltau(X_train[:, i], y_train)
-            if p_value > 1.05:
+            if p_value > .05:
                 selected_feature_ix[i] = False
             else:
                 selected_feature_ix[i] = True
                 indicator_feature_ls.append(feature)
 
-        """
+        #"""
         if not indicator_feature_ls:
             # in this case just output 0 as the best estimator for yield anomaly in that scenario
             yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
@@ -216,8 +216,8 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         corr_selected_feature_names = feature_names[selected_feature_ix]
         X_train = X_train[:, selected_feature_ix]
         X_test = X_test[:, selected_feature_ix]
-        """
-        corr_selected_feature_names = feature_names
+        #"""
+        #corr_selected_feature_names = feature_names
 
         # backward selection feature selection
         #X_train, selected_feature_names, fs = backwards_feature_selection(X=X_train, y=y_train,

@@ -72,7 +72,7 @@ def process_feature_df(yield_df, cc_df, feature_df, length, feature_name, start_
         start_date = year_day_to_date(year=row.harv_year - 1, day_of_year=start_point)
         end_date = year_day_to_date(year=row.harv_year, day_of_year=end_point)
         season_columns = value_columns[(column_dates >= start_date) & (column_dates <= end_date)]
-        assert len(season_columns) > 0
+        assert len(season_columns) > 0, f"Couldn't find {feature_name} data for {row}"
 
         # cut  out the relevant data
         season_values = feature_df.loc[feature_df.adm == row.adm, season_columns].values[0].astype("float")

@@ -10,12 +10,17 @@ feature_location_dict = {"ndvi": "remote sensing/smooth_ndvi_regional_matrix.csv
                          "preci-sum": "climate/pr_sum_regional_matrix.csv",
                          "si-preci-sum": "climate/si_pr_sum_regional_matrix.csv",
                          "preci-cdd": "climate/pr_cddMax_regional_matrix.csv",
+                         "preci-cwd": "climate/pr_cwdMax_regional_matrix.csv",
                          "preci-belowP01": "climate/pr_belowP01_regional_matrix.csv",
+                         "preci-belowP05": "climate/pr_belowP05_regional_matrix.csv",
+                         "preci-aboveP95": "climate/pr_aboveP95_regional_matrix.csv",
                          "preci-aboveP99": "climate/pr_aboveP99_regional_matrix.csv",
                          "si-temp-median": "climate/si_tas_median_regional_matrix.csv",
                          "min-temp-median": "climate/tasmin_median_regional_matrix.csv",
                          "max-temp-median": "climate/tasmax_median_regional_matrix.csv",
                          "min-temp-belowP01": "climate/tasmin_belowP01_regional_matrix.csv",
+                         "min-temp-belowP05": "climate/tasmin_belowP05_regional_matrix.csv",
+                         "max-temp-aboveP95": "climate/tasmax_aboveP95_regional_matrix.csv",
                          "max-temp-aboveP99": "climate/tasmax_aboveP99_regional_matrix.csv"}
 
 ndvi_feature_set = ["ndvi", "si-ndvi"]
