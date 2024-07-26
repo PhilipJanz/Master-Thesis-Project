@@ -2,6 +2,7 @@ import os
 
 from mlxtend.feature_selection import SequentialFeatureSelector
 from scipy.stats import kendalltau
+from sklearn.decomposition import PCA
 
 from config import PROCESSED_DATA_DIR
 from feature_selection import feature_selection_vif, backwards_feature_selection
@@ -89,8 +90,11 @@ unplausible_adm = corr_df[(corr_df.ndvi_1 < 0) & (corr_df["preci-cdd_1"] > 0)].i
 # load soil characteristics
 soil_df = load_soil_data()
 soil_df = make_adm_column(soil_df)
+pca = PCA(n_components=2)
+soil_df[["soil_1", "soil_2"]] = pca.fit_transform(soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']])
+print("explained_variance_ratio_ of PCA on soil:", pca.explained_variance_ratio_)
 soil_df = pd.merge(yield_df["adm"], soil_df, on=["adm"], how="left")
-soil_df = soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']]
+soil_df = soil_df[["soil_1", "soil_2"]] # soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']]
 # scale each column (soil property) individually
 soil_df.iloc[:, :] = StandardScaler().fit_transform(soil_df.values)
 
@@ -105,6 +109,12 @@ yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
 cluster_set = "adm1_"
 assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
 
+# define objective (target)
+objective = "yield"
+
+# vif thresgold
+vif_threshold = 5
+
 # choose model or set of models that are used
 model_types = ["xgb"]
 # choose max feature len for feature shrinking
@@ -112,10 +122,12 @@ max_feature_len = 1
 # choose duration (sec) of optimization using optuna
 opti_duration = 240
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
-n_startup_trials = 50
+n_startup_trials = 100
+# folds of optuna hyperparameter search
+num_folds = 20
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0722_{cluster_set}_vif2_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}"
+run_name = f"0726_{objective}_{cluster_set}_vif{vif_threshold}_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -150,7 +162,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         continue
 
     # define target and year
-    y = cluster_yield_df["yield_anomaly"]
+    y = cluster_yield_df[objective]
     years = cluster_yield_df.harv_year
 
     # prepare predictors # [cluster_yield_df.harv_year] +
@@ -232,9 +244,10 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         #X_vif, vif_selected_feature_names = feature_selection_vif(X_train[:, indicator_feature_ix],
         #                                                          corr_selected_feature_names[indicator_feature_ix],
         #                                                          threshold=2)
-        X_train, vif_selected_feature_names = feature_selection_vif(X_train,
-                                                                  corr_selected_feature_names,
-                                                                  threshold=2)
+        X_train, vif_selected_feature_names = feature_selection_vif(X=X_train,
+                                                                    feature_names=corr_selected_feature_names,
+                                                                    indicator_features=indicator_feature_ls,
+                                                                    threshold=vif_threshold)
         #X_train = np.hstack([X_vif, X_train[:, ~np.array(indicator_feature_ix)]])
         #selected_feature_names = np.array(vif_selected_feature_names + list(corr_selected_feature_names[~indicator_feature_ix]))
         selected_feature_names = np.array(vif_selected_feature_names)
@@ -249,7 +262,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
                                sampler=sampler,
                                model_types=run.model_types,
                                feature_set_selection=False, feature_len_shrinking=False,
-                               max_feature_len=max_feature_len, num_folds=20, seed=42)
+                               max_feature_len=max_feature_len, num_folds=num_folds, seed=42)
 
         mse, best_params = opti.optimize(n_trials=100000, timeout=run.opti_duration,
                                          show_progress_bar=True, print_result=False)

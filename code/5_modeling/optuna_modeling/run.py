@@ -1,10 +1,11 @@
 import os
 import pickle
+import shutil
 
 import numpy as np
 import pandas as pd
 
-from config import RUN_DIR
+from config import RUN_DIR, BASE_DIR
 
 
 def list_of_runs():
@@ -33,6 +34,9 @@ class Run:
 
         # create folder structure
         self.run_dir = self.create_folders()
+
+        # save copy of python code that created the run
+        shutil.copy(BASE_DIR / "code/5_modeling/optuna_modeling/yield_prediction_optuna.py", self.run_dir / "yield_prediction_optuna.py")
 
         # save that run
         self.save()

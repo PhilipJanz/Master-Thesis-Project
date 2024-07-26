@@ -36,13 +36,13 @@ def calculate_vif(X, feature_names):
         X = pd.DataFrame(X, columns=feature_names)
 
     vif_data = pd.DataFrame()
-    vif_data['Feature'] = X.columns
-    vif_data['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+    vif_data['feature'] = X.columns
+    vif_data['vif'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
 
     return vif_data
 
 
-def feature_selection_vif(X, feature_names, threshold=5.0):
+def feature_selection_vif(X, feature_names, indicator_features, threshold=5.0):
     """
     Perform feature selection based on VIF.
 
@@ -66,11 +66,12 @@ def feature_selection_vif(X, feature_names, threshold=5.0):
             break
 
         vif_data = calculate_vif(X.values, X.columns)
-        max_vif = vif_data['VIF'].max()
+        fixed_ix = np.array([name not in indicator_features for name in feature_names])
+        max_vif = vif_data[~fixed_ix].iloc[vif_data['vif'][~fixed_ix].argmax()]
 
-        if max_vif > threshold:
-            drop_feature = vif_data.loc[vif_data['VIF'].idxmax(), 'Feature']
-            X = X.drop(columns=[drop_feature])
+        if max_vif.vif > threshold:
+            X = X.drop(columns=[max_vif.feature])
+            feature_names = np.delete(feature_names, max_vif.name)
         else:
             break
 
