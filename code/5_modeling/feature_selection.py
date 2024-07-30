@@ -1,10 +1,107 @@
 
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
 from mlxtend.feature_selection import SequentialFeatureSelector
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from xgboost import XGBRegressor
 
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Dense
+from tensorflow.keras.models import Model
+
+
+class AutoencoderFeatureSelector(tf.keras.Model):
+    def __init__(self, input_dim, encoding_dim, encoder_layers=None, decoder_layers=None):
+        super(AutoencoderFeatureSelector, self).__init__()
+
+        # Default layer configurations if not provided
+        if encoder_layers is None:
+            encoder_layers = [encoding_dim]  # Default to a single encoding layer
+        if decoder_layers is None:
+            decoder_layers = [input_dim]  # Default to a single decoding layer
+
+        # Define the encoder
+        encoder_input = Input(shape=(input_dim,))
+        encoded_output = encoder_input
+        for units in encoder_layers:
+            encoded_output = Dense(units, activation='relu')(encoded_output)
+        self.encoded = encoded_output
+
+        # Define the decoder
+        decoder_input = self.encoded
+        for units in decoder_layers[:-1]:  # Exclude the last layer
+            decoder_input = Dense(units, activation='relu')(decoder_input)
+        decoder_output = Dense(decoder_layers[-1], activation='linear')(decoder_input)
+
+        # Create the encoder model
+        self.encoder_model = Model(inputs=encoder_input, outputs=self.encoded)
+
+        # Create the autoencoder model
+        self.autoencoder_model = Model(inputs=encoder_input, outputs=decoder_output)
+
+        # Compile the autoencoder model
+        self.autoencoder_model.compile(optimizer='adam', loss='mean_absolute_error')
+
+        # Initialize history dictionary
+        self.history = {'loss': [], 'val_loss': []}
+
+    def run(self, X):
+        return self.autoencoder_model.predict(X)
+
+    def encode(self, X):
+        # Use the encoder model to transform the data
+        return self.encoder_model.predict(X)
+
+    def fit(self, X_train, X_target, X_test=None, epochs=10, batch_size=10, shuffle=True):
+        # Train the autoencoder
+        print("Training the autoencoder...")
+        history = self.autoencoder_model.fit(
+            X_train, X_target,
+            epochs=epochs,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            verbose=1,
+            validation_data=(X_test, X_test) if X_test is not None else None
+        )
+
+        # Update the history
+        self.history['loss'].extend(history.history['loss'])
+        if 'val_loss' in history.history:
+            self.history['val_loss'].extend(history.history['val_loss'])
+        else:
+            self.history['val_loss'].extend([np.nan] * epochs)
+
+    def plot_history(self, start_epoch=0):
+        """
+        Plot training and validation loss values starting from the specified epoch.
+
+        Parameters:
+        - start_epoch: The epoch from which to start the plot. Must be >= 0.
+        """
+        # Ensure start_epoch is valid
+        if start_epoch < 0:
+            raise ValueError("start_epoch must be >= 0")
+        if start_epoch >= len(self.history['loss']):
+            raise ValueError("start_epoch exceeds the number of epochs")
+
+        # Calculate the range of epochs to plot
+        epochs_range = range(start_epoch, len(self.history['loss']))
+
+        # Get the subset of history starting from start_epoch
+        loss_values = self.history['loss'][start_epoch:]
+        val_loss_values = self.history['val_loss'][start_epoch:] if 'val_loss' in self.history else [np.nan] * len(loss_values)
+
+        # Plot training & validation loss values
+        plt.figure(figsize=(12, 6))
+        plt.plot(epochs_range, loss_values, label='Training Loss')
+        plt.plot(epochs_range, val_loss_values, label='Validation Loss')
+        plt.title('Model Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.yscale('log')  # Set the y-axis to a logarithmic scale
+        plt.legend()
+        plt.show()
 
 def backwards_feature_selection(X, y, feature_names):
     assert X.shape[1] == len(feature_names)

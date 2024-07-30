@@ -1,5 +1,8 @@
 import os
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
 from mlxtend.feature_selection import SequentialFeatureSelector
 from scipy.stats import kendalltau
 from sklearn.decomposition import PCA
@@ -7,8 +10,6 @@ from sklearn.decomposition import PCA
 from config import PROCESSED_DATA_DIR
 from feature_selection import feature_selection_vif, backwards_feature_selection
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import time
 import numpy as np
@@ -116,11 +117,11 @@ objective = "yield_anomaly"
 vif_threshold = 2
 
 # choose model or set of models that are used
-model_types = ["svr"]
+model_types = ["xgb"]
 # choose max feature len for feature shrinking
 max_feature_len = 1
 # choose duration (sec) of optimization using optuna
-opti_duration = 10
+opti_duration = 60
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
