@@ -67,28 +67,33 @@ predictors_list.append(soil_df.loc[yield_df.index])
 predictors_list.append(make_dummies(yield_df))
 # form the regressor-matrix X
 X, feature_names = make_X(df_ls=predictors_list, standardize=True)
-X_indicator =
+indicator_ix = np.array([np.any([feature_name in feature for feature_name in list(processed_feature_df_dict.keys())]) for feature in feature_names])
+X_indicator = X[:, indicator_ix]
+indicator_names = feature_names[indicator_ix]
 
 dim_ls = [5, 10, 15, 20]
 error_ls = []
+ndvi_error_ls = []
 for dim in dim_ls:
     ae = AutoencoderFeatureSelector(input_dim=X.shape[1],
                                     encoding_dim=dim,
-                                    encoder_layers=[128, 128, dim],
-                                    decoder_layers=[128, 128, X.shape[1]])
+                                    encoder_layers=[128, 128, 128, dim],
+                                    decoder_layers=[128, 128, 128, X_indicator.shape[1]])
 
 
     # Train the autoencoder
     print("Training the autoencoder...")
-    ae.fit(X_train=X, epochs=200, batch_size=20, shuffle=True)
-    ae.plot_history(start_epoch=100)
+    for batch_size in [10, 20, 30, 50, 80, 100, 200, 400, 1000, 2000]:
+        ae.fit(X_train=X, X_target=X_indicator, epochs=1000, batch_size=batch_size, shuffle=True)
+    ae.plot_history(start_epoch=300)
 
     # Transform (encode) the data
     print("Transforming the data...")
     X_ = ae.run(X)
-    error_ls.append(np.mean(np.abs(X_ - X)))
+    error_ls.append(np.mean(np.abs(X_ - X_indicator)))
+    ndvi_error_ls.append(np.mean(np.abs(X_[:, :10] - X_indicator[:, :10])))
 
-xy = pd.DataFrame((np.abs(X_ - X)).mean(0), index=feature_names)
+xy = pd.DataFrame((np.abs(X_ - X_indicator)).mean(0), index=indicator_names)
 
 
 
