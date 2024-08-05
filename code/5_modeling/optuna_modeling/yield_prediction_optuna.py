@@ -56,7 +56,7 @@ yield_df = make_adm_column(yield_df)
 cc_df = load_my_cc()
 
 # load and process features
-length = 1
+length = 10
 processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df,
                                                        feature_dict=feature_location_dict,
                                                        length=length,
@@ -107,7 +107,7 @@ yield_df = pd.merge(yield_df, cluster_df, how="left") # , on=["country", "adm1",
 
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
 yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
-cluster_set = "adm1_"
+cluster_set = "country"
 assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
 
 # define objective (target)
@@ -117,18 +117,18 @@ objective = "yield_anomaly"
 vif_threshold = 2
 
 # choose model or set of models that are used
-model_types = ["xgb"]
+model_types = ["nn"]
 # choose max feature len for feature shrinking
 max_feature_len = 1
 # choose duration (sec) of optimization using optuna
-opti_duration = 60
+opti_duration = 180
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
-num_folds = 30
+num_folds = 5
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0726_{objective}_{cluster_set}_corrtest05_vif{vif_threshold}_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}_{num_folds}"
+run_name = f"0804_{objective}_{cluster_set}_corrtest005_vif{vif_threshold}_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}_{num_folds}" #
 
 # load or create that run
 if run_name in list_of_runs():
@@ -155,6 +155,7 @@ else:
 # INFERENCE ############################################################################################################
 
 for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
+    #break
     if "Tanzania" in cluster_yield_df["country"].values:
         continue
 
@@ -185,7 +186,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
 
     # LOYOCV - leave one year out cross validation
     for year_out in np.unique(years):
-        #if year_out==2005:
+        #if year_out==2015:
         #    break
         year_out_bool = (years == year_out)
 
@@ -199,7 +200,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
             if not np.any([feature_name in feature for feature_name in list(processed_feature_df_dict.keys())]):
                 continue
             corr, p_value = kendalltau(X_train[:, i], y_train)
-            if p_value > .05:
+            if p_value > 0.05:
                 selected_feature_ix[i] = False
             else:
                 selected_feature_ix[i] = True
@@ -210,7 +211,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
             # in this case just output 0 as the best estimator for yield anomaly in that scenario
             yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
             yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
-            yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.var(y_train)
+            yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.mean(y_train ** 2)
             yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = 0
             continue
 
@@ -255,7 +256,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         X_test = X_test[:, [name in selected_feature_names for name in corr_selected_feature_names]]
         #indicator_feature_ix = np.concatenate([np.repeat(True, len(vif_selected_feature_names)),
         #                                       np.repeat(False, sum(~indicator_feature_ix))])
-        print(cluster_name, year_out, "selected features: ", selected_feature_names, "\nvar(y_train)=", np.var(y_train))
+        print(cluster_name, year_out, "selected features: ", selected_feature_names, "\nmse(y_train)=", np.mean(y_train ** 2))
 
         # make feature-, model- and hyperparameter-selection using optuna
         sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True, warn_independent_sampling=False)
@@ -357,7 +358,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
     preds = yield_df.loc[cluster_yield_df.index]["y_pred"]
     y_ = y[~preds.isna()]
     preds_ = preds[~preds.isna()]
-    nse = 1 - np.nanmean((preds_ - y_) ** 2) / np.var(y_)
+    nse = 1 - np.nanmean((preds_ - y_) ** 2) / np.mean(y_ ** 2)
     print(f"{cluster_name} finished with: NSE = {np.round(nse, 2)}")
 
     # break

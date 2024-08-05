@@ -87,21 +87,21 @@ assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}'
 objective = "yield_anomaly"
 
 # autoencoder dim
-autoencoder_dim = 5
+autoencoder_dim = 20
 
 # choose model or set of models that are used
 model_types = ["xgb"]
 # choose max feature len for feature shrinking
 max_feature_len = 1
 # choose duration (sec) of optimization using optuna
-opti_duration = 60
+opti_duration = 100
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
 num_folds = 30
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0731_{objective}_{cluster_set}__{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}_{num_folds}"
+run_name = f"0801_{objective}_{cluster_set}_autoencoder{autoencoder_dim}_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -117,7 +117,8 @@ else:
               cluster_set=cluster_set,
               model_types=model_types,
               opti_duration=opti_duration,
-              n_startup_trials=n_startup_trials)
+              n_startup_trials=n_startup_trials,
+              python_file="prediction_optuna_ho_autoencoder_fs")
 
     # columns to be filled with predictions
     yield_df["train_mse"] = np.nan
@@ -147,12 +148,13 @@ ae = AutoencoderFeatureSelector(input_dim=X.shape[1],
 print("Training the autoencoder...")
 for batch_size in [20, 50, 100, 200, 400, 1000, 2000]:
     ae.fit(X_train=X, X_target=X_indicator, epochs=1000, batch_size=batch_size, shuffle=True)
-ae.plot_history(start_epoch=7000)
+ae.plot_history(start_epoch=500)
 X_ = ae.encode(X)
 
 # INFERENCE ############################################################################################################
 
 for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
+
     if "Tanzania" in cluster_yield_df["country"].values:
         continue
 
@@ -165,7 +167,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
     years = cluster_yield_df.harv_year
 
     # prepare predictors # [cluster_yield_df.harv_year] +
-    predictors_list = [] # [cluster_yield_df.harv_year]
+    predictors_list = [cluster_yield_df.harv_year]
 
     # add dummies for regions
     if cluster_yield_df.adm.nunique() > 1:
@@ -194,7 +196,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
                                sampler=sampler,
                                model_types=run.model_types,
                                feature_set_selection=False, feature_len_shrinking=False,
-                               max_feature_len=max_feature_len, num_folds=num_folds, seed=42)
+                               num_folds=num_folds, seed=42)
 
         mse, best_params = opti.optimize(n_trials=100000, timeout=run.opti_duration,
                                          show_progress_bar=True, print_result=False)
