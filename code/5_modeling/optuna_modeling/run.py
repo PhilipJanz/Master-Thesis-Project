@@ -24,13 +24,15 @@ class Run:
                  name,
                  cluster_set,
                  model_types,
-                 opti_duration,
+                 timeout,
+                 n_trials,
                  n_startup_trials,
                  python_file="yield_prediction_optuna"):
         self.name = name
         self.cluster_set = cluster_set
         self.model_types = model_types
-        self.opti_duration = opti_duration
+        self.timeout = timeout
+        self.n_trials = n_trials
         self.n_startup_trials = n_startup_trials
 
         # create folder structure

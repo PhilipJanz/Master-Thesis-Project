@@ -100,31 +100,34 @@ yield_df = pd.merge(yield_df, cluster_df, how="left") # , on=["country", "adm1",
 
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
 yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
-cluster_set = "adm2"
+yield_df.loc[yield_df["country"] == "Tanzania", "adm1_"] = "Tanzania"
+cluster_set = "adm1_"
 assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
 
 # define objective (target)
 objective = "yield"
 
 # corr test alpha for selecting important features
-alpha = None
+alpha = 0.05
 
-# vif thresgold
-vif_threshold = 2
+# vif threshold
+vif_threshold = None
 
 # choose model or set of models that are used
-model_types = ["lasso"]
+model_types = ["xgb"]
 # choose max feature len for feature shrinking
 #max_feature_len = 1
+# choose timeout
+timeout = 300
 # choose duration (sec) of optimization using optuna
-opti_duration = 6
+n_trials = 250
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
 num_folds = 10
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0810_{objective}_{cluster_set}_{'-'.join(model_types)}_{length}_{opti_duration}_{n_startup_trials}_{num_folds}"
+run_name = f"0810_{objective}_{cluster_set}_{'-'.join(model_types)}_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 if alpha:
     run_name += f"_corrtest{alpha}"
 if vif_threshold:
@@ -144,7 +147,8 @@ else:
     run = Run(name=run_name,
               cluster_set=cluster_set,
               model_types=model_types,
-              opti_duration=opti_duration,
+              timeout=timeout,
+              n_trials=n_trials,
               n_startup_trials=n_startup_trials)
 
     # columns to be filled with predictions
@@ -228,7 +232,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
                                feature_set_selection=False, feature_len_shrinking=False,
                                num_folds=num_folds, seed=42)
 
-        mse, best_params = opti.optimize(n_trials=100000, timeout=run.opti_duration,
+        mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
                                          show_progress_bar=True, print_result=False)
 
 
