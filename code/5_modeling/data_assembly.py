@@ -136,12 +136,20 @@ def rescale_array(arr, new_length):
         original_length = len(arr)
         if new_length == original_length:
             return arr
+        elif new_length > original_length:
+            # Create an array of the new indices, scaled appropriately
+            new_indices = np.linspace(0, original_length - 1, new_length)
 
-        # Create an array of the new indices, scaled appropriately
-        new_indices = np.linspace(0, original_length - 1, new_length)
+            # Interpolate the values at the new indices
+            rescaled_arr = np.interp(new_indices, np.arange(original_length), arr)
+        else:
+            # Calculate the size of each segment
+            segment_size = original_length / new_length
 
-        # Interpolate the values at the new indices
-        rescaled_arr = np.interp(new_indices, np.arange(original_length), arr)
+            rescaled_arr = np.array([
+                np.mean(arr[int(i * segment_size):int((i + 1) * segment_size)])
+                for i in range(new_length)
+            ])
 
     elif arr.ndim == 2:
         num_rows, num_cols = arr.shape
@@ -159,7 +167,7 @@ def rescale_array(arr, new_length):
     return rescaled_arr
 
 
-def make_X_y(df, dummies=True, include_year=True, features=None):
+def make_X_y(df, include_year=True, features=None):
     assert all(df.columns[:5] == ['country', 'adm1', 'adm2', 'harv_year', 'yield'])
     y = np.array(df["yield"])
     X = []  # Features (2D array)
@@ -180,9 +188,6 @@ def make_X_y(df, dummies=True, include_year=True, features=None):
     columns_to_scaled = np.where(np.max(X_df, axis=0) > 10)[0]
     X_df.iloc[:, columns_to_scaled] = scaler.fit_transform(X_df.iloc[:, columns_to_scaled])
     column_names = X_df.columns
-    #if include_year:
-    # multiplying by a large number means the coeeficient can be very small and wont have any weight for the penelization term
-    #X_df["harv_year"] = X_df["harv_year"] * 1e6
     return X, y, years, column_names
 
 

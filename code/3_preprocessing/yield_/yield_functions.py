@@ -85,6 +85,8 @@ def read_malawi_yield():
                                             columns='indicator', values='value').reset_index()
     malawi_yield_df = malawi_yield_df.rename(columns={"Area Planted": "area", "Quantity Produced": "production", "Yield": "yield"})
     malawi_yield_df = malawi_yield_df.dropna()
+    # drop Likoma since its just a tiny island
+    malawi_yield_df = malawi_yield_df[malawi_yield_df["adm2"] != "Likoma"]
     print(f"Loaded {len(malawi_yield_df)} yield datapoints for Malawi.")
     return malawi_yield_df
 

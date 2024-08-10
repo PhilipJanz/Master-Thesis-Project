@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from mlxtend.feature_selection import SequentialFeatureSelector
+from scipy.stats import kendalltau
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from xgboost import XGBRegressor
 
@@ -139,7 +140,27 @@ def calculate_vif(X, feature_names):
     return vif_data
 
 
-def feature_selection_vif(X, feature_names, indicator_features, threshold=5.0):
+def feature_selection_corr_test(X_train, X_test, y_train, feature_names, indicator_names, alpha=0.1):
+    selected_feature_ix = np.repeat(True, len(feature_names))
+    indicator_feature_ls = []
+    for i, feature in enumerate(feature_names):
+        if feature not in indicator_names:
+            continue
+        corr, p_value = kendalltau(X_train[:, i], y_train)
+        if p_value > alpha:
+            selected_feature_ix[i] = False
+        else:
+            selected_feature_ix[i] = True
+            indicator_feature_ls.append(feature)
+
+    corr_selected_feature_names = feature_names[selected_feature_ix]
+    X_train = X_train[:, selected_feature_ix]
+    X_test = X_test[:, selected_feature_ix]
+
+    return X_train, X_test, corr_selected_feature_names
+
+
+def feature_selection_vif(X, feature_names, indicator_names, threshold=5.0):
     """
     Perform feature selection based on VIF.
 
@@ -163,7 +184,7 @@ def feature_selection_vif(X, feature_names, indicator_features, threshold=5.0):
             break
 
         vif_data = calculate_vif(X.values, X.columns)
-        fixed_ix = np.array([name not in indicator_features for name in feature_names])
+        fixed_ix = np.array([name not in indicator_names for name in feature_names])
         max_vif = vif_data[~fixed_ix].iloc[vif_data['vif'][~fixed_ix].argmax()]
 
         if max_vif.vif > threshold:
