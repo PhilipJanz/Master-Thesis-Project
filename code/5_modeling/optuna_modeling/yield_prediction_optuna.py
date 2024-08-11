@@ -54,7 +54,7 @@ yield_df = make_adm_column(yield_df)
 cc_df = load_my_cc()
 
 # load and process features
-length = 10
+length = 2
 processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df,
                                                        feature_dict=feature_location_dict,
                                                        length=length,
@@ -101,33 +101,33 @@ yield_df = pd.merge(yield_df, cluster_df, how="left") # , on=["country", "adm1",
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
 yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
 yield_df.loc[yield_df["country"] == "Tanzania", "adm1_"] = "Tanzania"
-cluster_set = "adm1_"
+cluster_set = "adm"
 assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
 
 # define objective (target)
 objective = "yield"
 
 # corr test alpha for selecting important features
-alpha = 0.05
+alpha = None
 
 # vif threshold
-vif_threshold = None
+vif_threshold = 2
 
 # choose model or set of models that are used
 model_types = ["xgb"]
 # choose max feature len for feature shrinking
 #max_feature_len = 1
 # choose timeout
-timeout = 300
+timeout = 30
 # choose duration (sec) of optimization using optuna
-n_trials = 250
+n_trials = 200
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
 num_folds = 10
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0810_{objective}_{cluster_set}_{'-'.join(model_types)}_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0811_{objective}_{cluster_set}_{'-'.join(model_types)}_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 if alpha:
     run_name += f"_corrtest{alpha}"
 if vif_threshold:
@@ -205,11 +205,11 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
 
         if alpha:
             X_train, X_test, sel_feature_names_ = feature_selection_corr_test(X_train=X_train,
-                                                                         X_test=X_test,
-                                                                         y_train=y_train,
-                                                                         feature_names=sel_feature_names,
-                                                                         indicator_names=indicator_names,
-                                                                         alpha=alpha)
+                                                                              X_test=X_test,
+                                                                              y_train=y_train,
+                                                                              feature_names=sel_feature_names,
+                                                                              indicator_names=indicator_names,
+                                                                              alpha=alpha)
         else:
             sel_feature_names_ = sel_feature_names.copy()
         """
@@ -277,7 +277,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         opti.best_params["feature_names"] = optuna_selected_feature_names
         run.save_model_and_params(name=f"{cluster_name}_{year_out}", model=trained_model, params=opti.best_params)
 
-        if len(y_test) > 1:
+        if sum((y_test - np.mean(y_test)) ** 2) != 0:
             print(f"{year_out} finished with nse: {1 - sum((y_pred - y_test) ** 2) / sum((y_test - np.mean(y_test)) ** 2)}")
 
         """

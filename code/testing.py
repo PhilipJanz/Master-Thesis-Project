@@ -193,7 +193,6 @@ import pandas as pd
 
 from config import RESULTS_DATA_DIR
 from optuna_modeling.run import open_run
-from visualizations.visualization_functions import plot_performance_map
 
 """
 This script unfolds the yield estimation performance by giving metrics for each cluster set and model.
@@ -208,11 +207,20 @@ pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
 run_name_ls = []
+rmse_ls = []
 avg_nse_ls = []
 n_adm_ls = []
 num_nse_above0_ls = []
-num_nse_above025_ls = []
+num_nse_above03_ls = []
 for run_name in os.listdir(pred_result_dir):
+    if run_name == "old":
+        continue
+
+    if "anomaly" in run_name:
+        objective = "yield_anomaly"
+    else:
+        objective = "yield"
+
     #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
     #for i, (name, model) in enumerate(model_dir.items()):
     #    importance = model.feature_importances_
@@ -225,51 +233,13 @@ for run_name in os.listdir(pred_result_dir):
 
     performance_dict = {"adm": [], "mse": [], "nse": []}
     for adm, adm_results_df in result_df.groupby("adm"):
+        y_true = adm_results_df[objective]
+        mse = np.mean((adm_results_df["y_pred"] - adm_results_df[objective]) ** 2)
 
-        mse = np.mean((adm_results_df["y_pred"] - adm_results_df["yield_anomaly"]) ** 2)
-
-        nse = 1 - mse / np.mean(adm_results_df["yield_anomaly"] ** 2)
-
-        # fill dict
-        performance_dict["adm"].append(adm)
-        performance_dict["mse"].append(mse)
-        performance_dict["nse"].append(nse)
-
-    performance_df = pd.DataFrame(performance_dict)
-
-    run_name_ls.append(run_name)
-    avg_nse_ls.append(np.mean(performance_df["nse"]))
-    n_adm_ls.append(len(performance_df))
-    num_nse_above0_ls.append(np.sum(performance_df["nse"] > 0))
-    num_nse_above025_ls.append(np.sum(performance_df["nse"] > 0.25))
-
-overview_df = pd.DataFrame({"run": run_name_ls, "avg_nse": avg_nse_ls,
-                            "n_adm": n_adm_ls,
-                            "num_nse_above0": num_nse_above0_ls,
-                            "num_nse_above025": num_nse_above025_ls})
-
-run_name_ls = []
-avg_nse_ls = []
-n_adm_ls = []
-num_nse_above0_ls = []
-num_nse_above025_ls = []
-for run_name in os.listdir(pred_result_dir):
-    #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
-    #for i, (name, model) in enumerate(model_dir.items()):
-    #    importance = model.feature_importances_
-    #    print(name, feature_ls_ls[i][np.argmax(importance)], np.max(importance))
-
-    yield_df = pd.read_csv(pred_result_dir / f"{run_name}/prediction.csv", keep_default_na=False)
-
-    result_df = yield_df[yield_df["y_pred"] != ""]
-    result_df["y_pred"] = pd.to_numeric(result_df["y_pred"])
-
-    performance_dict = {"adm": [], "mse": [], "nse": []}
-    for adm, adm_results_df in result_df.groupby("adm"):
-
-        mse = np.mean((adm_results_df["y_pred"] - adm_results_df["yield_anomaly"]) ** 2)
-
-        nse = 1 - mse / np.mean(adm_results_df["yield_anomaly"] ** 2)
+        if objective == "yield_anomaly":
+            nse = 1 - mse / np.mean(y_true ** 2)
+        else:
+            nse = 1 - mse / np.mean((y_true - np.mean(y_true)) ** 2)
 
         # fill dict
         performance_dict["adm"].append(adm)
@@ -279,12 +249,14 @@ for run_name in os.listdir(pred_result_dir):
     performance_df = pd.DataFrame(performance_dict)
 
     run_name_ls.append(run_name)
+    rmse_ls.append(np.sqrt(np.mean((result_df["y_pred"] - result_df[objective]) ** 2)))
     avg_nse_ls.append(np.mean(performance_df["nse"]))
     n_adm_ls.append(len(performance_df))
     num_nse_above0_ls.append(np.sum(performance_df["nse"] > 0))
-    num_nse_above025_ls.append(np.sum(performance_df["nse"] > 0.25))
+    num_nse_above03_ls.append(np.sum(performance_df["nse"] > 0.3))
 
-overview_df = pd.DataFrame({"run": run_name_ls, "avg_nse": avg_nse_ls,
+pd.set_option('display.max_columns', None)
+overview_df = pd.DataFrame({"run": run_name_ls, "rmse": rmse_ls, "avg_nse": avg_nse_ls,
                             "n_adm": n_adm_ls,
                             "num_nse_above0": num_nse_above0_ls,
-                            "num_nse_above025": num_nse_above025_ls})
+                            "num_nse_above03": num_nse_above03_ls})

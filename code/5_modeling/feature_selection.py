@@ -179,18 +179,27 @@ def feature_selection_vif(X, feature_names, indicator_names, threshold=5.0):
     if isinstance(X, np.ndarray):
         X = pd.DataFrame(X, columns=feature_names)
 
-    while True:
-        if X.shape[1] == 1:
-            break
+    while X.shape[1] > 1:
 
-        vif_data = calculate_vif(X.values, X.columns)
-        fixed_ix = np.array([name not in indicator_names for name in feature_names])
-        max_vif = vif_data[~fixed_ix].iloc[vif_data['vif'][~fixed_ix].argmax()]
+        if X.shape[1] >= X.shape[0]:
+            fixed_ix = np.array([name not in indicator_names for name in feature_names])
 
-        if max_vif.vif > threshold:
-            X = X.drop(columns=[max_vif.feature])
-            feature_names = np.delete(feature_names, max_vif.name)
+            # Step 1: Correlation-based feature elimination
+            corr_matrix = X.corr(method="kendall").abs() - np.identity(X.shape[1])
+            strongest_corr_feature_ix = np.argmax(corr_matrix[~fixed_ix].max(1))
+            to_drop = corr_matrix[~fixed_ix].iloc[strongest_corr_feature_ix].name
+            X = X.drop(columns=[to_drop])
+            feature_names = np.delete(feature_names, np.where([to_drop == feature_names])[1])
+            print(to_drop, np.max(corr_matrix[~fixed_ix].max(1)))
         else:
-            break
+            vif_data = calculate_vif(X.values, X.columns)
+            fixed_ix = np.array([name not in indicator_names for name in feature_names])
+            max_vif = vif_data[~fixed_ix].iloc[vif_data['vif'][~fixed_ix].argmax()]
+            if max_vif.vif > threshold:
+                X = X.drop(columns=[max_vif.feature])
+                feature_names = np.delete(feature_names, max_vif.name)
+                print(max_vif.feature, max_vif.vif)
+            else:
+                break
 
-    return X.values, X.columns.tolist()
+    return X.values, X.columns.values
