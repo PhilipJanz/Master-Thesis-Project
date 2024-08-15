@@ -8,7 +8,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Lasso
 from sklearn.metrics import mean_squared_error
 from sklearn.utils._testing import ignore_warnings
-from tensorflow.keras.models import Sequential, clone_model
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Input
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
@@ -217,6 +217,7 @@ class OptunaOptimizer:
         # It might happen that each and every feature is filtered out.
         # In that case we are left with the naive average predictor:
         if len(X_trans) == 0:
+            # mse of average predictor is the variance
             return np.mean(self.y ** 2)
 
         # Select model type
@@ -236,17 +237,19 @@ class OptunaOptimizer:
         mse_ls = []
         for _ in range(self.repetition_per_fold):
             for fold_out in np.unique(folds):
+                # some models have memory, so we need to train copies of the model in each fold
+                if model_name == "nn":
+                    model_copy, _ = init_model(X=X_trans, model_name=model_name, trial=trial)
+                else:
+                    model_copy = deepcopy(model)
+
                 fold_out_bool = (folds == fold_out)
 
                 X_train, y_train = X_trans[~fold_out_bool], self.y[~fold_out_bool]
                 X_val, y_val = X_trans[fold_out_bool], self.y[fold_out_bool]
 
-                # some models have memory, so we need to train copies of the model in each fold
-                if model_name == "nn":
-                    model_copy = clone_model(model)
-                    model_copy.set_weights(model.get_weights())
-                    model_copy.compile(optimizer=model.optimizer, loss=model.loss, metrics=model.metrics)
-                    #model_copy, _ = init_model(X=X_trans, model_name=model_name, trial=trial)
+                # Fit the model and diffrentiate between the model classes
+                if model_name == 'nn':
                     # Train the Keras model
                     model_copy.fit(X_train, y_train,
                                    epochs=params["epochs"],
@@ -256,7 +259,6 @@ class OptunaOptimizer:
                     # Predict the target values
                     preds = model_copy.predict(X_val, verbose=0).flatten()
                 else:
-                    model_copy = deepcopy(model)
                     # Fit the model
                     model_copy.fit(X_train, y_train)
 

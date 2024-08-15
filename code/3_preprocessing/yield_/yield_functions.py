@@ -60,7 +60,7 @@ def read_malawi_yield():
     Read raw yield data for Malawi
     :return: yield df
     """
-    raw_yield_df = pd.read_csv(SOURCE_DATA_DIR / "yield/FEWS NET/maize_yield_south_africa.csv")#, header=None)
+    raw_yield_df = pd.read_csv(SOURCE_DATA_DIR / "yield/FEWS NET/maize_yield_malawi.csv")#, header=None)
     malawi_yield_df = raw_yield_df[raw_yield_df.country == "Malawi"].copy()
     #print(len(malawi_yield_df))
     # filtering irrigation season and others

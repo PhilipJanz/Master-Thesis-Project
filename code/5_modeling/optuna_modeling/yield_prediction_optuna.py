@@ -49,6 +49,8 @@ There are two main loops:
 yield_df = load_yield_data()
 yield_df = yield_df[(yield_df.harv_year > 2001) & (yield_df.harv_year < 2023)].reset_index(drop=True)
 yield_df = make_adm_column(yield_df)
+# data unit test
+assert len(yield_df) == 1775
 
 # load crop calendar (CC)
 cc_df = load_my_cc()
