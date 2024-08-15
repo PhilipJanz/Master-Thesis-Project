@@ -8,7 +8,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Lasso
 from sklearn.metrics import mean_squared_error
 from sklearn.utils._testing import ignore_warnings
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Sequential, clone_model
 from tensorflow.keras.layers import Dense, Dropout, Input
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
@@ -39,9 +39,10 @@ def create_nn(input_shape, trial=None, params=None):
 
     # Hidden layers
     if trial:
-        for i in range(trial.suggest_int('n_layers', 1, 3)):
-            model.add(Dense(trial.suggest_int(f'units_layer{i+1}', 8, 256), activation='relu'))
-            model.add(Dropout(trial.suggest_float(f'dropout_layer{i+1}', 0.0, 0.5)))
+        n_layers = trial.suggest_int('n_layers', 1, 1)
+        for i in range(n_layers):
+            model.add(Dense(trial.suggest_int(f'units_layer{i+1}', 1, 32), activation='sigmoid'))
+            model.add(Dropout(trial.suggest_float(f'dropout_layer{i+1}', 0.0, 0.9)))
     else:
         for i in range(params["n_layers"]):
             model.add(Dense(params[f'units_layer{i + 1}'], activation='relu'))
@@ -52,7 +53,7 @@ def create_nn(input_shape, trial=None, params=None):
 
     # Compile model
     if trial:
-        learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-1, log=True)
+        learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-1, log=True)
     else:
         learning_rate = params["learning_rate"]
 
@@ -134,8 +135,8 @@ def init_model(X, model_name, trial=None, params=None):
     elif model_name == 'nn':
         if trial:
             params = {
-                "epochs": trial.suggest_int('epochs', 10, 500),
-                "batch_size": trial.suggest_int('batch_size', 1, len(X))
+                "epochs": trial.suggest_int('epochs', 50, 500),
+                "batch_size": trial.suggest_int('batch_size', 50, len(X))
             }
             return create_nn(trial=trial, input_shape=X.shape[1]), params
         else:
@@ -216,8 +217,7 @@ class OptunaOptimizer:
         # It might happen that each and every feature is filtered out.
         # In that case we are left with the naive average predictor:
         if len(X_trans) == 0:
-            # mse of average predictor is the variance
-            return np.var(self.y)
+            return np.mean(self.y ** 2)
 
         # Select model type
         model_name = trial.suggest_categorical('model_type', self.model_types)
@@ -236,19 +236,17 @@ class OptunaOptimizer:
         mse_ls = []
         for _ in range(self.repetition_per_fold):
             for fold_out in np.unique(folds):
-                # some models have memory, so we need to train copies of the model in each fold
-                if model_name == "nn":
-                    model_copy, _ = init_model(X=X_trans, model_name=model_name, trial=trial)
-                else:
-                    model_copy = deepcopy(model)
-
                 fold_out_bool = (folds == fold_out)
 
                 X_train, y_train = X_trans[~fold_out_bool], self.y[~fold_out_bool]
                 X_val, y_val = X_trans[fold_out_bool], self.y[fold_out_bool]
 
-                # Fit the model and diffrentiate between the model classes
-                if model_name == 'nn':
+                # some models have memory, so we need to train copies of the model in each fold
+                if model_name == "nn":
+                    model_copy = clone_model(model)
+                    model_copy.set_weights(model.get_weights())
+                    model_copy.compile(optimizer=model.optimizer, loss=model.loss, metrics=model.metrics)
+                    #model_copy, _ = init_model(X=X_trans, model_name=model_name, trial=trial)
                     # Train the Keras model
                     model_copy.fit(X_train, y_train,
                                    epochs=params["epochs"],
@@ -258,6 +256,7 @@ class OptunaOptimizer:
                     # Predict the target values
                     preds = model_copy.predict(X_val, verbose=0).flatten()
                 else:
+                    model_copy = deepcopy(model)
                     # Fit the model
                     model_copy.fit(X_train, y_train)
 

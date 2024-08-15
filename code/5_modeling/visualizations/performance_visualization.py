@@ -20,14 +20,14 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '0810_yield_adm2_lasso_10_6_50_10'
-run = open_run(run_name=run_name)
+run_name = '0812_yield_anomaly_adm_lasso_3_300_100_50_10'
+#run = open_run(run_name=run_name)
 #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
 #for i, (name, model) in enumerate(model_dir.items()):
 #    importance = model.feature_importances_
 #    print(name, feature_ls_ls[i][np.argmax(importance)], np.max(importance))
 
-yield_df = run.load_prediction()
+yield_df = pd.read_csv(pred_result_dir / f"{run_name}/prediction.csv") # run.load_prediction()
 result_df = yield_df[yield_df["y_pred"] != ""]
 result_df["y_pred"] = pd.to_numeric(result_df["y_pred"])
 
