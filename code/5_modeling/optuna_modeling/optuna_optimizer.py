@@ -8,8 +8,9 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Lasso
 from sklearn.metrics import mean_squared_error
 from sklearn.utils._testing import ignore_warnings
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Input
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras import Input
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 
@@ -35,7 +36,7 @@ def create_nn(input_shape, trial=None, params=None):
     model = Sequential()
 
     # Input layer
-    model.add(Input(shape=(input_shape,)))
+    #model.add(Input(shape=(input_shape,)))
 
     # Hidden layers
     if trial:

@@ -8,8 +8,9 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 from xgboost import XGBRegressor
 
 import tensorflow as tf
-from tensorflow.keras.layers import Input, Dense
-from tensorflow.keras.models import Model
+from tensorflow.keras import Input
+from tensorflow.keras.layers import Dense
+from tensorflow.keras import Model
 
 
 class AutoencoderFeatureSelector(tf.keras.Model):

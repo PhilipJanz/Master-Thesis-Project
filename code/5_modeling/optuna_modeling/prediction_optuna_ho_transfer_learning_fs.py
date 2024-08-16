@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
+from tensorflow.keras.models import Model
 
 from data_loader import load_yield_data, load_my_cc, load_cluster_data, load_soil_data
 from optuna_modeling.feature_sets_for_optuna import feature_location_dict
@@ -96,7 +97,7 @@ n_startup_trials = 50
 num_folds = 10
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0815_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0816_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -115,53 +116,63 @@ else:
               n_trials=n_trials,
               n_startup_trials=n_startup_trials,
               python_file="prediction_optuna_ho_transfer_learning_fs")
+    run.trans_dir = run.run_dir / "transfer_features"
+    os.mkdir(run.trans_dir)
 
     # columns to be filled with predictions
     yield_df["train_mse"] = np.nan
     yield_df["y_pred"] = np.nan
-    yield_df["best_model"] = np.nan
     yield_df["n_opt_trials"] = np.nan
 
+# define target and year
+y = yield_df[objective]
+years = yield_df.harv_year
+
+# prepare predictors # [cluster_yield_df.harv_year] +
+predictors_list = [yield_df.harv_year] + [df.loc[yield_df.index] for df in processed_feature_df_dict.values()]
+# add dummies for regions
+predictors_list.append(soil_df.loc[yield_df.index])
+predictors_list.append(make_dummies(yield_df))
+
+# form the regressor-matrix X
+X, feature_names = make_X(df_ls=predictors_list, standardize=True)
 
 # INFERENCE ############################################################################################################
 
-for cluster_name, sub_yield_df in yield_df.groupby(data_split):
+for source_name, source_yield_df in yield_df.groupby(data_split):
 
     # in case you loaded an existing run, you can skip the clusters already predicted
-    if np.all(~sub_yield_df["y_pred"].isna()):
+    if np.all(~source_yield_df["y_pred"].isna()):
         continue
 
-    # define target and year
-    y = sub_yield_df[objective]
-    years = sub_yield_df.harv_year
+    # extract source data
+    source_ix = source_yield_df.index
+    X_source = X[source_ix]
+    y_source = y[source_ix]
+    years_source = years[source_ix]
 
-    # prepare predictors # [cluster_yield_df.harv_year] +
-    predictors_list = [sub_yield_df.harv_year]
-
-    # add dummies for regions
-    if sub_yield_df.adm.nunique() > 1:
-        predictors_list.append(soil_df.loc[sub_yield_df.index])
-        predictors_list.append(make_dummies(sub_yield_df))
-
-    # form the regressor-matrix X
-    X, feature_names = make_X(df_ls=predictors_list, standardize=True)
-    #X = np.hstack([X, X_[sub_yield_df.index]])
-    #feature_names = np.append(feature_names, np.array([f"ae_feature_{i + 1}" for i in range(autoencoder_dim)]))
+    # further filter the dummy features for non-source regions
+    non_source_adm = yield_df.loc[~yield_df.index.isin(source_ix), "adm"].unique()
+    non_source_ix = np.array([feature in non_source_adm for feature in feature_names])
+    X_source = X_source[:, ~non_source_ix]
+    X_ = X[:, ~non_source_ix]
+    feature_names_ = feature_names[~non_source_ix]
 
     # LOYOCV - leave one year out cross validation
-    for year_out in np.unique(years):
-        #if year_out==2005:
+    for year_out in np.unique(years_source):
+        #if year_out==2016:
         #    break
-        year_out_bool = (years == year_out)
+        year_out_bool = (years_source == year_out)
 
         # split the data
-        X_train, y_train, years_train = X[~year_out_bool], y[~year_out_bool], years[~year_out_bool]
-        X_test, y_test = X[year_out_bool], y[year_out_bool]
-        print(cluster_name, year_out, f"\nmse(train)={round(np.mean(y_train ** 2), 3)}")
+        X_train, y_train, years_train = X_source[~year_out_bool], y_source[~year_out_bool], years_source[~year_out_bool]
+        X_test, y_test = X_source[year_out_bool], y_source[year_out_bool]
+        print(source_name, year_out, f"\nmse(train)={round(np.mean(y_train ** 2), 3)}")
 
-        # make feature-, model- and hyperparameter-selection using optuna
-        sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True, warn_independent_sampling=False)
-        opti = OptunaOptimizer(X=X_train, y=y_train, years=years_train, predictor_names=feature_names,
+        # hyperparameter-selection using optuna
+        sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True,
+                                             warn_independent_sampling=False)
+        opti = OptunaOptimizer(X=X_train, y=y_train, years=years_train, predictor_names=feature_names_,
                                sampler=sampler,
                                model_types=run.model_types,
                                feature_set_selection=False, feature_len_shrinking=False,
@@ -171,53 +182,56 @@ for cluster_name, sub_yield_df in yield_df.groupby(data_split):
                                          show_progress_bar=True, print_result=False)
 
         # train best model
-        X_train_trans, optuna_selected_feature_names, trained_model = opti.train_best_model(X=X_train, y=y_train,
-                                                                                  predictor_names=feature_names)
-        # TODO
-        if opti.best_params["model_type"] == "xgb":
-            indicator_feature_ls = [sel_feature for sel_feature in optuna_selected_feature_names if np.any([feature in sel_feature for feature in list(processed_feature_df_dict.keys())])]
-            if not indicator_feature_ls:
-                # in this case just output 0 as the best estimator for yield anomaly in that scenario
-                yield_df.loc[sub_yield_df.index[year_out_bool], "y_pred"] = 0.0
-                yield_df.loc[sub_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
-                yield_df.loc[sub_yield_df.index[year_out_bool], "train_mse"] = np.var(y_train)
-                yield_df.loc[sub_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
-                continue
-        if opti.best_params["model_type"] == "lasso":
-            if np.all(trained_model.coef_[optuna_selected_feature_names != "harv_year"] == 0):
-                # in this case just output 0 as the best estimator for yield anomaly in that scenario
-                yield_df.loc[sub_yield_df.index[year_out_bool], "y_pred"] = 0.0
-                yield_df.loc[sub_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
-                yield_df.loc[sub_yield_df.index[year_out_bool], "train_mse"] = np.var(y_train)
-                yield_df.loc[sub_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
-                continue
-
-        # prepare test-data
-        X_test_trans, _ = opti.transform_X(X=X_test, predictor_names=feature_names, params=opti.best_params)
+        _, _, trained_model = opti.train_best_model(X=X_train, y=y_train, predictor_names=feature_names_)
 
         # predict train- & test-data
-        y_pred_train = trained_model.predict(X_train_trans)
-        y_pred = trained_model.predict(X_test_trans)
+        y_pred_train = trained_model.predict(X_train).T[0]
+        y_pred_test = trained_model.predict(X_test).T[0]
 
         # write the predictions into the result df
-        yield_df.loc[sub_yield_df.index[year_out_bool], "train_mse"] = np.mean((y_pred_train - y_train) ** 2)
-        yield_df.loc[sub_yield_df.index[year_out_bool], "y_pred"] = y_pred
-        yield_df.loc[sub_yield_df.index[year_out_bool], "best_model"] = opti.best_params['model_type']
-        yield_df.loc[sub_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
+        train_mse = np.mean((y_pred_train - y_train) ** 2)
+        if objective == "yield_anomaly":
+            train_nse = 1 - train_mse / np.mean(y_train ** 2)
+        else:
+            train_nse = 1 - train_mse / np.mean((y_train - np.mean(y_train)) ** 2)
+        test_mse = np.mean((y_pred_test - y_test) ** 2)
+        yield_df.loc[source_yield_df.index[year_out_bool], "train_mse"] = train_mse
+        yield_df.loc[source_yield_df.index[year_out_bool], "train_nse"] = train_nse
+        yield_df.loc[source_yield_df.index[year_out_bool], "test_mse"] = test_mse
+        if len(y_test) > 5:
+            if objective == "yield_anomaly":
+                test_nse = 1 - test_mse / np.mean(y_test ** 2)
+            else:
+                test_nse = 1 - test_mse / np.mean((y_test - np.mean(y_test)) ** 2)
+        else:
+            test_nse = ""
+        yield_df.loc[source_yield_df.index[year_out_bool], "test_nse"] = test_nse
+        yield_df.loc[source_yield_df.index[year_out_bool], "y_pred"] = y_pred_test
+        yield_df.loc[source_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
+        print(f"{source_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)} ({round(test_nse, 2)})")
 
         # save trained model and best params
-        trained_model.feature_names = optuna_selected_feature_names
-        opti.best_params["feature_names"] = optuna_selected_feature_names
-        run.save_model_and_params(name=f"{cluster_name}_{year_out}", model=trained_model, params=opti.best_params)
+        trained_model.feature_names = feature_names_
+        opti.best_params["feature_names"] = feature_names_
+        run.save_model_and_params(name=f"{source_name}_{year_out}", model=trained_model, params=opti.best_params)
 
-    preds = yield_df.loc[sub_yield_df.index]["y_pred"]
-    y_ = y[~preds.isna()]
+        # extract learned features for all data by taking results of last hidden layer
+        transfer_model = Model(inputs=trained_model.layers[0].input, outputs=trained_model.layers[-3].output)
+        # Use the encoder model to transform the data
+        transfer_features = transfer_model.predict(X_)
+        transfer_feature_df = pd.DataFrame(transfer_features, columns=[f"transfer_feature_{i + 1}" for i in range(transfer_features.shape[1])])
+        transfer_feature_df = pd.concat([yield_df[["country", "adm1", "adm2", "adm", "harv_year"]], transfer_feature_df], axis=1)
+        transfer_feature_df.to_csv(run.trans_dir / f"{source_name}_{year_out}.csv", index=False)
+
+    preds = yield_df.loc[source_yield_df.index]["y_pred"]
+    y_ = y_source[~preds.isna()]
     preds_ = preds[~preds.isna()]
+
     if objective == "yield_anomaly":
-        nse = 1 - np.nanmean((preds_ - y_) ** 2) / np.mean((y_) ** 2)
+        nse = 1 - np.mean((preds_ - y_) ** 2) / np.mean(y_ ** 2)
     else:
-        nse = 1 - np.nanmean((preds_ - y_) ** 2) / np.mean((y_ - np.mean(y_)) ** 2)
-    print(f"{cluster_name} finished with: NSE = {np.round(nse, 2)}")
+        nse = 1 - np.mean((preds_ - y_) ** 2) / np.mean((y_ - np.mean(y_)) ** 2)
+    print(f"{source_name} finished with: NSE = {np.round(nse, 2)}")
 
     # save predictions and performance
     run.save_predictions(prediction_df=yield_df)
