@@ -22,6 +22,7 @@ from data_assembly import process_list_of_feature_df, make_adm_column, make_X, m
 from optuna_modeling.run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer import OptunaOptimizer
 import optuna
+from tensorflow.keras import backend as K
 
 # silence the message after each trial
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -90,11 +91,11 @@ objective = "yield_anomaly"
 # choose timeout
 timeout = 3600
 # choose duration (sec) of optimization using optuna
-n_trials = 200
+n_trials = 1
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
-num_folds = 10
+num_folds = 2
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
 run_name = f"0816_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
@@ -222,6 +223,9 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
         transfer_feature_df = pd.DataFrame(transfer_features, columns=[f"transfer_feature_{i + 1}" for i in range(transfer_features.shape[1])])
         transfer_feature_df = pd.concat([yield_df[["country", "adm1", "adm2", "adm", "harv_year"]], transfer_feature_df], axis=1)
         transfer_feature_df.to_csv(run.trans_dir / f"{source_name}_{year_out}.csv", index=False)
+
+        # After each model is done
+        K.clear_session()
 
     preds = yield_df.loc[source_yield_df.index]["y_pred"]
     y_ = y_source[~preds.isna()]

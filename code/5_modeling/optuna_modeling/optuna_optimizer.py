@@ -13,6 +13,7 @@ from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras import Input
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
+from tensorflow.keras.models import clone_model
 
 from xgboost import XGBRegressor
 
@@ -52,15 +53,14 @@ def create_nn(input_shape, trial=None, params=None):
     # Output layer
     model.add(Dense(1, activation='linear'))
 
-    # Compile model
-    if trial:
-        learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-1, log=True)
-    else:
-        learning_rate = params["learning_rate"]
+    #if trial:
+    #    learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-1, log=True)
+    #else:
+    #    learning_rate = params["learning_rate"]
 
-    model.compile(optimizer=Adam(learning_rate=learning_rate),
-                  loss='mean_squared_error',
-                  metrics=['mean_squared_error'])
+    # Compile model
+    model.compile(optimizer="Adam", # Adam(learning_rate=learning_rate),
+                  loss='mean_squared_error')
 
     return model
 
@@ -240,7 +240,9 @@ class OptunaOptimizer:
             for fold_out in np.unique(folds):
                 # some models have memory, so we need to train copies of the model in each fold
                 if model_name == "nn":
-                    model_copy, _ = init_model(X=X_trans, model_name=model_name, trial=trial)
+                    model_copy = clone_model(model)
+                    model_copy.set_weights(model.get_weights())
+                    model_copy.compile(optimizer="Adam", loss=model.loss)
                 else:
                     model_copy = deepcopy(model)
 
@@ -249,7 +251,7 @@ class OptunaOptimizer:
                 X_train, y_train = X_trans[~fold_out_bool], self.y[~fold_out_bool]
                 X_val, y_val = X_trans[fold_out_bool], self.y[fold_out_bool]
 
-                # Fit the model and diffrentiate between the model classes
+                # Fit the model and differentiate between the model classes
                 if model_name == 'nn':
                     # Train the Keras model
                     model_copy.fit(X_train, y_train,
@@ -275,7 +277,8 @@ class OptunaOptimizer:
     def optimize(self, timeout=600, n_trials=100,
                  n_jobs=-1, show_progress_bar=True, print_result=True):
         self.study.optimize(self.objective, n_trials=n_trials, timeout=timeout,
-                            n_jobs=n_jobs, show_progress_bar=show_progress_bar)
+                            n_jobs=n_jobs, show_progress_bar=show_progress_bar,
+                            ) # gc_after_trial=True)
 
         self.best_mse, self.best_params = self.study.best_trial.value, self.study.best_trial.params
 
