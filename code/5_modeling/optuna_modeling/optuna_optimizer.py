@@ -238,14 +238,6 @@ class OptunaOptimizer:
         mse_ls = []
         for _ in range(self.repetition_per_fold):
             for fold_out in np.unique(folds):
-                # some models have memory, so we need to train copies of the model in each fold
-                if model_name == "nn":
-                    model_copy = clone_model(model)
-                    model_copy.set_weights(model.get_weights())
-                    model_copy.compile(optimizer="Adam", loss=model.loss)
-                else:
-                    model_copy = deepcopy(model)
-
                 fold_out_bool = (folds == fold_out)
 
                 X_train, y_train = X_trans[~fold_out_bool], self.y[~fold_out_bool]
@@ -253,6 +245,9 @@ class OptunaOptimizer:
 
                 # Fit the model and differentiate between the model classes
                 if model_name == 'nn':
+                    model_copy = clone_model(model)
+                    model_copy.set_weights(model.get_weights())
+                    model_copy.compile(optimizer="Adam", loss=model.loss)
                     # Train the Keras model
                     model_copy.fit(X_train, y_train,
                                    epochs=params["epochs"],
@@ -262,6 +257,7 @@ class OptunaOptimizer:
                     # Predict the target values
                     preds = model_copy.predict(X_val, verbose=0).flatten()
                 else:
+                    model_copy = deepcopy(model)
                     # Fit the model
                     model_copy.fit(X_train, y_train)
 
@@ -271,14 +267,16 @@ class OptunaOptimizer:
                 # Calculate the RMSE and append it to the list
                 fold_mse = mean_squared_error(y_val, preds)
                 mse_ls.append(fold_mse)
-
+                del model_copy
+                tf.keras.backend.clear_session()
+        del model
         return np.mean(mse_ls)
 
     def optimize(self, timeout=600, n_trials=100,
                  n_jobs=-1, show_progress_bar=True, print_result=True):
         self.study.optimize(self.objective, n_trials=n_trials, timeout=timeout,
                             n_jobs=n_jobs, show_progress_bar=show_progress_bar,
-                            ) # gc_after_trial=True)
+                            gc_after_trial=True)
 
         self.best_mse, self.best_params = self.study.best_trial.value, self.study.best_trial.params
 

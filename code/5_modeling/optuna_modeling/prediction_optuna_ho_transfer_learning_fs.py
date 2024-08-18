@@ -91,14 +91,14 @@ objective = "yield_anomaly"
 # choose timeout
 timeout = 3600
 # choose duration (sec) of optimization using optuna
-n_trials = 1
+n_trials = 200
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
-num_folds = 2
+num_folds = 5
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0816_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0818_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -180,7 +180,7 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
                                num_folds=num_folds, seed=42)
 
         mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
-                                         show_progress_bar=True, print_result=False)
+                                         show_progress_bar=True, print_result=False, n_jobs=1)
 
         # train best model
         _, _, trained_model = opti.train_best_model(X=X_train, y=y_train, predictor_names=feature_names_)
@@ -225,7 +225,7 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
         transfer_feature_df.to_csv(run.trans_dir / f"{source_name}_{year_out}.csv", index=False)
 
         # After each model is done
-        K.clear_session()
+        del trained_model
 
     preds = yield_df.loc[source_yield_df.index]["y_pred"]
     y_ = y_source[~preds.isna()]
