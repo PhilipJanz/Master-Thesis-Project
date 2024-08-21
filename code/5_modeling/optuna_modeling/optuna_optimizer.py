@@ -2,27 +2,31 @@ from copy import deepcopy
 
 import optuna
 import numpy as np
+import gc
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Lasso
 from sklearn.metrics import mean_squared_error
 from sklearn.utils._testing import ignore_warnings
+from xgboost import XGBRegressor
+
+
+import tensorflow as tf
+tf.keras.config.disable_interactive_logging()
+tf.random.set_seed(42)
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras import Input
 from tensorflow.keras.optimizers import Adam
-import tensorflow as tf
 from tensorflow.keras.models import clone_model
 
-from xgboost import XGBRegressor
 
 from config import RESULTS_DATA_DIR
 from data_assembly import rescale_array, group_years
 from optuna_modeling.feature_sets_for_optuna import feature_sets
 
 
-def create_nn(input_shape, trial=None, params=None):
+def create_nn(trial=None, params=None):
     """
     This function creates a neural network with variable number of hidden layers and drop-out regularisation
     The parameter can be given by 'params' or will be chosen by optuna using 'trial'. Only one is possible
@@ -36,18 +40,15 @@ def create_nn(input_shape, trial=None, params=None):
 
     model = Sequential()
 
-    # Input layer
-    #model.add(Input(shape=(input_shape,)))
-
     # Hidden layers
     if trial:
         n_layers = trial.suggest_int('n_layers', 1, 1)
         for i in range(n_layers):
             model.add(Dense(trial.suggest_int(f'units_layer{i+1}', 1, 32), activation='sigmoid'))
-            model.add(Dropout(trial.suggest_float(f'dropout_layer{i+1}', 0.0, 0.9)))
+            model.add(Dropout(trial.suggest_float(f'dropout_layer{i+1}', 0.0, 0.5)))
     else:
         for i in range(params["n_layers"]):
-            model.add(Dense(params[f'units_layer{i + 1}'], activation='relu'))
+            model.add(Dense(params[f'units_layer{i + 1}'], activation='sigmoid'))
             model.add(Dropout(params[f'dropout_layer{i + 1}']))
 
     # Output layer
@@ -136,12 +137,12 @@ def init_model(X, model_name, trial=None, params=None):
     elif model_name == 'nn':
         if trial:
             params = {
-                "epochs": trial.suggest_int('epochs', 50, 500),
+                "epochs": trial.suggest_int('epochs', 200, 1000),
                 "batch_size": trial.suggest_int('batch_size', 50, len(X))
             }
-            return create_nn(trial=trial, input_shape=X.shape[1]), params
+            return create_nn(trial=trial), params
         else:
-            return create_nn(params=params, input_shape=X.shape[1]), params
+            return create_nn(params=params), params
     elif model_name == 'xgb':
         if trial:
             model_params = {
@@ -268,7 +269,8 @@ class OptunaOptimizer:
                 fold_mse = mean_squared_error(y_val, preds)
                 mse_ls.append(fold_mse)
                 del model_copy
-                tf.keras.backend.clear_session()
+                gc.collect()
+                #tf.keras.backend.clear_session()
         del model
         return np.mean(mse_ls)
 

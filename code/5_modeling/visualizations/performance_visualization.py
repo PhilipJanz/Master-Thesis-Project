@@ -20,7 +20,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '0812_yield_anomaly_adm_lasso_3_300_100_50_10'
+run_name = '0820_yield_anomaly_adm1__transfer_features_from_Malawi_xgb_300_250_50_10'
 #run = open_run(run_name=run_name)
 #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
 #for i, (name, model) in enumerate(model_dir.items()):
@@ -28,7 +28,7 @@ run_name = '0812_yield_anomaly_adm_lasso_3_300_100_50_10'
 #    print(name, feature_ls_ls[i][np.argmax(importance)], np.max(importance))
 
 yield_df = pd.read_csv(pred_result_dir / f"{run_name}/prediction.csv") # run.load_prediction()
-result_df = yield_df[yield_df["y_pred"] != ""]
+result_df = yield_df[(yield_df["y_pred"] != "") & (~yield_df["y_pred"].isna())]
 result_df["y_pred"] = pd.to_numeric(result_df["y_pred"])
 
 if "anomaly" in run_name:
@@ -50,7 +50,13 @@ for adm, adm_results_df in result_df.groupby("adm"):
     performance_dict["adm"].append(adm)
     performance_dict["mse"].append(mse)
     performance_dict["nse"].append(nse)
-
+    """
+    fig, ax = plt.subplots()
+    ax.plot(adm_results_df["harv_year"], y_true)
+    ax.plot(adm_results_df["harv_year"], adm_results_df["y_pred"])
+    plt.title(f"{adm} {nse}")
+    plt.show()
+    """
 performance_df = pd.DataFrame(performance_dict)
 
 # print performance

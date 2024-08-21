@@ -39,7 +39,7 @@ class Run:
         self.run_dir = self.create_folders()
 
         # save copy of python code that created the run
-        shutil.copy(BASE_DIR / "code/5_modeling/optuna_modeling/yield_prediction_optuna.py", self.run_dir / f"{python_file}.py")
+        shutil.copy(BASE_DIR / f"code/5_modeling/optuna_modeling/{python_file}.py", self.run_dir / f"{python_file}.py")
 
         # save that run
         self.save()
@@ -135,6 +135,46 @@ class Run:
         performance_df = pd.DataFrame(performance_dict)
 
         return model_dir, params_df, feature_ls_ls
+
+    def load_params(self):
+        file_names = os.listdir(self.run_dir / "params")
+        params_dir = {}
+        for file_name in file_names:
+            with open(self.run_dir / f'params/{file_name}', 'rb') as file:
+                params = pickle.load(file)
+                if not params_dir:
+                    params_dir = {k: [v] for k, v in params.items()}
+                    params_dir["cluster_name"] = [file_name[:-9]]
+                    params_dir["year"] = [int(file_name[-8:-4])]
+                else:
+                    for k, v in params.items():
+                        params_dir[k].append(v)
+                    params_dir["cluster_name"].append(file_name[:-9])
+                    params_dir["year"].append(int(file_name[-8:-4]))
+        feature_ls_ls = params_dir["feature_names"]
+        del params_dir["feature_names"]
+        params_df = pd.DataFrame(params_dir)
+
+        result_df = self.load_prediction()
+        result_df = result_df[result_df["y_pred"] != ""]
+        result_df["y_pred"] = pd.to_numeric(result_df["y_pred"])
+
+        performance_dict = {"cluster_name": [], "year": [], "mse": [], "nse": []}
+        for adm_year, adm_year_results_df in result_df.groupby(["adm1_", "harv_year"]):
+
+            mse = np.mean((adm_year_results_df["y_pred"] - adm_year_results_df["yield_anomaly"]) ** 2)
+
+            nse = 1 - mse / np.mean(adm_year_results_df["yield_anomaly"] ** 2)
+
+            # fill dict
+            performance_dict["cluster_name"].append(adm_year[0])
+            performance_dict["year"].append(adm_year[1])
+            performance_dict["mse"].append(mse)
+            performance_dict["nse"].append(nse)
+
+        performance_df = pd.DataFrame(performance_dict)
+
+        return params_df, feature_ls_ls
 
 
     def save_model_and_params(self, name, model, params):

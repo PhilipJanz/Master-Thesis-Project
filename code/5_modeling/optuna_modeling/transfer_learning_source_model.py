@@ -23,6 +23,9 @@ from optuna_modeling.run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer import OptunaOptimizer
 import optuna
 from tensorflow.keras import backend as K
+import tensorflow as tf
+tf.keras.config.disable_interactive_logging()
+tf.random.set_seed(42)
 
 # silence the message after each trial
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -56,7 +59,7 @@ yield_df = make_adm_column(yield_df)
 cc_df = load_my_cc()
 
 # load and process features
-length = 5
+length = 3
 processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df,
                                                        feature_dict=feature_location_dict,
                                                        length=length,
@@ -89,7 +92,7 @@ assert data_split in yield_df.columns, f"The chosen cluster-set '{data_split}' i
 objective = "yield_anomaly"
 
 # choose timeout
-timeout = 3600
+timeout = 1800
 # choose duration (sec) of optimization using optuna
 n_trials = 200
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
@@ -98,7 +101,7 @@ n_startup_trials = 50
 num_folds = 5
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0818_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0819_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -116,7 +119,7 @@ else:
               timeout=timeout,
               n_trials=n_trials,
               n_startup_trials=n_startup_trials,
-              python_file="prediction_optuna_ho_transfer_learning_fs")
+              python_file="transfer_learning_source_model")
     run.trans_dir = run.run_dir / "transfer_features"
     os.mkdir(run.trans_dir)
 
@@ -124,6 +127,7 @@ else:
     yield_df["train_mse"] = np.nan
     yield_df["y_pred"] = np.nan
     yield_df["n_opt_trials"] = np.nan
+    run.save_predictions(prediction_df=yield_df)
 
 # define target and year
 y = yield_df[objective]
@@ -165,6 +169,10 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
         #    break
         year_out_bool = (years_source == year_out)
 
+        # in case you loaded an existing run, you can skip the year already predicted
+        if np.all(~source_yield_df[year_out_bool]["y_pred"].isna()):
+            continue
+
         # split the data
         X_train, y_train, years_train = X_source[~year_out_bool], y_source[~year_out_bool], years_source[~year_out_bool]
         X_test, y_test = X_source[year_out_bool], y_source[year_out_bool]
@@ -180,7 +188,7 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
                                num_folds=num_folds, seed=42)
 
         mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
-                                         show_progress_bar=True, print_result=False, n_jobs=1)
+                                         show_progress_bar=True, print_result=False, n_jobs=-1)
 
         # train best model
         _, _, trained_model = opti.train_best_model(X=X_train, y=y_train, predictor_names=feature_names_)
@@ -199,17 +207,20 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
         yield_df.loc[source_yield_df.index[year_out_bool], "train_mse"] = train_mse
         yield_df.loc[source_yield_df.index[year_out_bool], "train_nse"] = train_nse
         yield_df.loc[source_yield_df.index[year_out_bool], "test_mse"] = test_mse
-        if len(y_test) > 5:
+        if len(y_test) > 3:
             if objective == "yield_anomaly":
                 test_nse = 1 - test_mse / np.mean(y_test ** 2)
             else:
                 test_nse = 1 - test_mse / np.mean((y_test - np.mean(y_test)) ** 2)
         else:
-            test_nse = ""
+            test_nse = None
         yield_df.loc[source_yield_df.index[year_out_bool], "test_nse"] = test_nse
         yield_df.loc[source_yield_df.index[year_out_bool], "y_pred"] = y_pred_test
         yield_df.loc[source_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
-        print(f"{source_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)} ({round(test_nse, 2)})")
+        if test_nse:
+            print(f"{source_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)} ({round(test_nse, 2)})")
+        else:
+            print(f"{source_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)}")
 
         # save trained model and best params
         trained_model.feature_names = feature_names_
@@ -226,6 +237,14 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
 
         # After each model is done
         del trained_model
+        del transfer_model
+
+        # save predictions and performance
+        run.save_predictions(prediction_df=yield_df)
+        run.save_performance(prediction_df=yield_df[~(yield_df["y_pred"].isna())], cluster_set=data_split)
+
+        # save run
+        run.save()
 
     preds = yield_df.loc[source_yield_df.index]["y_pred"]
     y_ = y_source[~preds.isna()]
@@ -237,11 +256,5 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
         nse = 1 - np.mean((preds_ - y_) ** 2) / np.mean((y_ - np.mean(y_)) ** 2)
     print(f"{source_name} finished with: NSE = {np.round(nse, 2)}")
 
-    # save predictions and performance
-    run.save_predictions(prediction_df=yield_df)
-    run.save_performance(prediction_df=yield_df[~(yield_df["y_pred"].isna())], cluster_set=data_split)
-
-    # save run
-    run.save()
 
 # VISUALIZATION ########################################################################################################
