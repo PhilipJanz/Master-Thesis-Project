@@ -6,7 +6,7 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from scipy.stats import kendalltau
 from sklearn.decomposition import PCA
 
-from config import PROCESSED_DATA_DIR
+from config import PROCESSED_DATA_DIR, SEED
 from feature_selection import FeatureLearner
 
 import time
@@ -25,7 +25,7 @@ import optuna
 from tensorflow.keras import backend as K
 import tensorflow as tf
 tf.keras.config.disable_interactive_logging()
-tf.random.set_seed(42)
+tf.random.set_seed(SEED)
 
 # silence the message after each trial
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -101,7 +101,7 @@ n_startup_trials = 50
 num_folds = 5
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0819_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0822_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -119,7 +119,7 @@ else:
               timeout=timeout,
               n_trials=n_trials,
               n_startup_trials=n_startup_trials,
-              python_file="transfer_learning_source_model")
+              python_file=os.path.abspath(__file__))
     run.trans_dir = run.run_dir / "transfer_features"
     os.mkdir(run.trans_dir)
 
@@ -180,12 +180,12 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
 
         # hyperparameter-selection using optuna
         sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True,
-                                             warn_independent_sampling=False)
+                                             warn_independent_sampling=False, seed=SEED)
         opti = OptunaOptimizer(X=X_train, y=y_train, years=years_train, predictor_names=feature_names_,
                                sampler=sampler,
                                model_types=run.model_types,
                                feature_set_selection=False, feature_len_shrinking=False,
-                               num_folds=num_folds, seed=42)
+                               num_folds=num_folds)
 
         mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
                                          show_progress_bar=True, print_result=False, n_jobs=-1)

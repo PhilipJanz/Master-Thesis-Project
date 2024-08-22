@@ -1,5 +1,9 @@
 import os
 
+from optuna.exceptions import ExperimentalWarning
+
+from config import SEED
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 #os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
@@ -10,6 +14,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils._testing import ignore_warnings
 
 from data_loader import load_cluster_data, load_soil_data
 from data_assembly import make_adm_column, make_X, make_dummies
@@ -40,7 +45,7 @@ There are two main loops:
 
 # source model
 source_run_name = "0819_yield_anomaly_country_transferable-nn_3_1800_200_50_5"
-source_name = "Malawi"
+source_name = "Tanzania"
 
 source_run = open_run(source_run_name)
 yield_df = source_run.load_prediction()
@@ -81,10 +86,10 @@ n_trials = 250
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
-num_folds = 10
+num_folds = 5
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0820_{objective}_{cluster_set}_transfer_features_from_{source_name}_{'-'.join(model_types)}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0822_{objective}_{cluster_set}_transfer_features_from_{source_name}_{'-'.join(model_types)}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -102,7 +107,7 @@ else:
               timeout=timeout,
               n_trials=n_trials,
               n_startup_trials=n_startup_trials,
-              python_file="prediction_using_transfer_model")
+              python_file=os.path.abspath(__file__))
 
     # columns to be filled with predictions
     yield_df["train_mse"] = np.nan
@@ -145,6 +150,11 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
             continue
 
         # load transfer features
+        if f"{source_name}_{year_out}.csv" not in os.listdir(source_run.trans_dir):
+            # in this case just output 0 as the best estimator for yield anomaly in that scenario
+            yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
+            yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "no-source-model"
+            continue
         transfer_feature_df = pd.read_csv(source_run.trans_dir / f"{source_name}_{year_out}.csv")
         feature_loc = ["transfer" in col for col in transfer_feature_df.columns]
         transfer_feature_names = transfer_feature_df.columns[feature_loc]
@@ -163,16 +173,16 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
             print(cluster_name, year_out, f"\nmse(y_train) = {round(np.mean(y_train ** 2), 3)}")
 
         # make feature-, model- and hyperparameter-selection using optuna
-        sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True, warn_independent_sampling=False)
+        sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True,
+                                             warn_independent_sampling=False, seed=SEED)
         opti = OptunaOptimizer(X=X_train, y=y_train, years=years_train, predictor_names=feature_names_,
                                sampler=sampler,
                                model_types=run.model_types,
                                feature_set_selection=False, feature_len_shrinking=False,
-                               num_folds=num_folds, seed=42)
+                               num_folds=num_folds)
 
         mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
                                          show_progress_bar=True, print_result=False)
-
 
         # train best model
         _, _, trained_model = opti.train_best_model(X=X_train, y=y_train, predictor_names=feature_names)
@@ -219,9 +229,9 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = y_pred_test
         yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
         if test_nse:
-            print(f"{source_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)} ({round(test_nse, 2)})")
+            print(f"{cluster_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)} ({round(test_nse, 2)})")
         else:
-            print(f"{source_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)}")
+            print(f"{cluster_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)}")
 
         # save trained model and best params
         trained_model.feature_names = feature_names

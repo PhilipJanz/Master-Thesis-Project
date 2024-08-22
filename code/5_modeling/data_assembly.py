@@ -7,7 +7,7 @@ from collections import defaultdict
 
 from sklearn.preprocessing import StandardScaler
 
-from config import PROCESSED_DATA_DIR
+from config import PROCESSED_DATA_DIR, SEED
 
 
 def make_X(df_ls, standardize=True):
@@ -191,15 +191,12 @@ def make_X_y(df, include_year=True, features=None):
     return X, y, years, column_names
 
 
-def group_years(years, n, seed=None):
+def group_years(years, n):
     unique_years = list(set(years))
 
-    # Set the random seed if provided
-    if seed is not None:
-        rng = random.Random(seed)
-        rng.shuffle(unique_years)
-    else:
-        random.shuffle(unique_years)
+    # Set the random seed
+    rng = random.Random(SEED)
+    rng.shuffle(unique_years)
 
     # Create groups and distribute unique values randomly
     groups = defaultdict(list)

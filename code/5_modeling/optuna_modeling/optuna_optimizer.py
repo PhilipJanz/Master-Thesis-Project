@@ -1,3 +1,4 @@
+from config import RESULTS_DATA_DIR, SEED
 from copy import deepcopy
 
 import optuna
@@ -11,17 +12,16 @@ from sklearn.metrics import mean_squared_error
 from sklearn.utils._testing import ignore_warnings
 from xgboost import XGBRegressor
 
-
+"""
 import tensorflow as tf
 tf.keras.config.disable_interactive_logging()
-tf.random.set_seed(42)
+tf.random.set_seed(SEED)
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import clone_model
+"""
 
-
-from config import RESULTS_DATA_DIR
 from data_assembly import rescale_array, group_years
 from optuna_modeling.feature_sets_for_optuna import feature_sets
 
@@ -190,8 +190,7 @@ class OptunaOptimizer:
                  model_types=['svr', 'rf', 'lasso', 'nn', 'xgb'],
                  sampler=optuna.samplers.TPESampler,
                  num_folds=5,
-                 repetition_per_fold=1,
-                 seed=42):
+                 repetition_per_fold=1):
         # init
         self.X = X
         self.y = y
@@ -201,7 +200,6 @@ class OptunaOptimizer:
         self.feature_set_selection = feature_set_selection
         self.model_types = model_types
         self.num_folds = num_folds
-        self.seed = seed
         self.repetition_per_fold = repetition_per_fold
         self.feature_set_selection = feature_set_selection
         self.feature_len_shrinking = feature_len_shrinking
@@ -230,7 +228,7 @@ class OptunaOptimizer:
 
         # shrink number of folds if wanted else make loyoCV
         if self.num_folds < len(np.unique(self.years)):
-            folds = group_years(years=self.years, n=self.num_folds, seed=self.seed)
+            folds = group_years(years=self.years, n=self.num_folds)
         else:
             folds = self.years.copy()
 

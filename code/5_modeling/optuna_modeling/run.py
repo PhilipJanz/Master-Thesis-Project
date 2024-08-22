@@ -27,7 +27,7 @@ class Run:
                  timeout,
                  n_trials,
                  n_startup_trials,
-                 python_file="yield_prediction_optuna"):
+                 python_file):
         self.name = name
         self.cluster_set = cluster_set
         self.model_types = model_types
@@ -39,7 +39,7 @@ class Run:
         self.run_dir = self.create_folders()
 
         # save copy of python code that created the run
-        shutil.copy(BASE_DIR / f"code/5_modeling/optuna_modeling/{python_file}.py", self.run_dir / f"{python_file}.py")
+        shutil.copy(python_file, self.run_dir / python_file.split("\\")[-1])
 
         # save that run
         self.save()

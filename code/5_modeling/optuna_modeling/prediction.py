@@ -151,7 +151,8 @@ else:
               model_types=model_types,
               timeout=timeout,
               n_trials=n_trials,
-              n_startup_trials=n_startup_trials)
+              n_startup_trials=n_startup_trials,
+              python_file=os.path.abspath(__file__))
 
     # columns to be filled with predictions
     yield_df["train_mse"] = np.nan

@@ -20,7 +20,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '0820_yield_anomaly_adm1__transfer_features_from_Malawi_xgb_300_250_50_10'
+run_name = '0822_yield_anomaly_adm1__transfer_features_from_Tanzania_xgb_300_250_50_10'
 #run = open_run(run_name=run_name)
 #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
 #for i, (name, model) in enumerate(model_dir.items()):
