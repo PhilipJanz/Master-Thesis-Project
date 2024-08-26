@@ -3,7 +3,6 @@ from copy import deepcopy
 
 import optuna
 import numpy as np
-import gc
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor
@@ -12,15 +11,13 @@ from sklearn.metrics import mean_squared_error
 from sklearn.utils._testing import ignore_warnings
 from xgboost import XGBRegressor
 
-"""
 import tensorflow as tf
+
 tf.keras.config.disable_interactive_logging()
 tf.random.set_seed(SEED)
 from tensorflow.keras import Sequential
-from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.models import clone_model
-"""
+from tensorflow.keras.models import clone_model, Model
+from tensorflow.keras.layers import Input, Dropout, LSTM, Dense, concatenate
 
 from data_assembly import rescale_array, group_years
 from optuna_modeling.feature_sets_for_optuna import feature_sets
@@ -30,7 +27,6 @@ def create_nn(trial=None, params=None):
     """
     This function creates a neural network with variable number of hidden layers and drop-out regularisation
     The parameter can be given by 'params' or will be chosen by optuna using 'trial'. Only one is possible
-    :param input_shape: number of predictors (columns of X)
     :param trial: trial from optuna for hyperparameter optimization
     :param params: specific hyperparameters
     :return: Keras-nn ready to be trained. Make it run the extra mile!
@@ -44,8 +40,8 @@ def create_nn(trial=None, params=None):
     if trial:
         n_layers = trial.suggest_int('n_layers', 1, 1)
         for i in range(n_layers):
-            model.add(Dense(trial.suggest_int(f'units_layer{i+1}', 1, 32), activation='sigmoid'))
-            model.add(Dropout(trial.suggest_float(f'dropout_layer{i+1}', 0.0, 0.5)))
+            model.add(Dense(trial.suggest_int(f'units_layer{i + 1}', 1, 32), activation='sigmoid'))
+            model.add(Dropout(trial.suggest_float(f'dropout_layer{i + 1}', 0.0, 0.5)))
     else:
         for i in range(params["n_layers"]):
             model.add(Dense(params[f'units_layer{i + 1}'], activation='sigmoid'))
@@ -54,14 +50,68 @@ def create_nn(trial=None, params=None):
     # Output layer
     model.add(Dense(1, activation='linear'))
 
-    #if trial:
-    #    learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-1, log=True)
-    #else:
-    #    learning_rate = params["learning_rate"]
-
     # Compile model
-    model.compile(optimizer="Adam", # Adam(learning_rate=learning_rate),
-                  loss='mean_squared_error')
+    model.compile(optimizer="Adam", loss='mean_squared_error')
+
+    return model
+
+
+def create_lstm(t, f, s, trial=None, params=None):
+    """
+    This function creates a LSTM neural network with variable number of hidden layers and drop-out regularisation
+    The parameter can be given by 'params' or will be chosen by optuna using 'trial'. Only one is possible
+    :param t: length of timeseries
+    :param f: number of temporal features
+    :param s: number of static (non-temporal) features
+    :param trial: trial from optuna for hyperparameter optimization
+    :param params: specific hyperparameters
+    :return: Keras-nn ready to be trained. Make it run the extra mile!
+    """
+    # check if inputs are reasonable: xor on trial and params
+    assert (not trial) ^ (not params), "Choose either params OR give an optuna trial (it's xor)"
+
+    # Define input shapes
+    time_sensitive_input = Input(shape=(t, f), name='time_sensitive_input')
+    static_input = Input(shape=(s,), name='static_input')
+
+    # Hidden layers with dropout
+    if trial:
+        # dropout after input
+        input_dropout = trial.suggest_float(f'input_dropout', 0.2, 0.5)
+        time_sensitive_input = Dropout(rate=input_dropout)(time_sensitive_input)
+        static_input = Dropout(rate=input_dropout)(static_input)
+
+        # LSTM layer for time-sensitive data
+        lstm_out = LSTM(units=trial.suggest_int(f'lstm_units', 1, 5),
+                        dropout=trial.suggest_float(f'lstm_dropout', 0.2, 0.5),
+                        recurrent_dropout=trial.suggest_float(f'lstm_recurrent_dropout', 0.2, 0.5),
+                        return_sequences=False)(time_sensitive_input)
+        # Concatenate with static data
+        merged = concatenate([static_input, lstm_out])
+        # init last hidden layer
+        dense_out = Dense(units=trial.suggest_int(f'hidden_units', 1, 32), activation='sigmoid')(merged)
+    else:
+        # dropout after input
+        input_dropout = params[f'input_dropout']
+        time_sensitive_input = Dropout(rate=input_dropout)(time_sensitive_input)
+        static_input = Dropout(rate=input_dropout)(static_input)
+
+        # LSTM layer for time-sensitive data
+        lstm_out = LSTM(units=params[f'lstm_units'],
+                        dropout=params[f'lstm_dropout'],
+                        recurrent_dropout=params[f'lstm_recurrent_dropout'],
+                        return_sequences=False)(time_sensitive_input)
+        # Concatenate with static data
+        merged = concatenate([static_input, lstm_out])
+        # init last hidden layer
+        dense_out = Dense(units=params[f'hidden_units'], activation='sigmoid')(merged)
+
+    # Output layer (regression example)
+    output = Dense(units=1, activation='linear')(dense_out)
+
+    # Create and compile the model
+    model = Model(inputs=[static_input, time_sensitive_input], outputs=output)
+    model.compile(optimizer='adam', loss='mse')
 
     return model
 
@@ -85,12 +135,14 @@ def select_features(X, predictor_names, trial=None, params=None):
         feature_set_selection_bool = [params[name] for name in relevant_feature_sets]
 
     # list names of features not selected to filter them out
-    left_out_feature_sets = [name for name, selected in zip(relevant_feature_sets, feature_set_selection_bool) if not selected]
+    left_out_feature_sets = [name for name, selected in zip(relevant_feature_sets, feature_set_selection_bool) if
+                             not selected]
 
     # set predictors False when they were not selected
     for left_out_feature_set in left_out_feature_sets:
         left_out_features = relevant_feature_sets[left_out_feature_set]
-        predictor_selection_bool = predictor_selection_bool * [np.all([x not in predictor for x in left_out_features]) for predictor in predictor_names]
+        predictor_selection_bool = predictor_selection_bool * [np.all([x not in predictor for x in left_out_features])
+                                                               for predictor in predictor_names]
 
     # make new X with selected feature sets
     X_sel = X[:, predictor_selection_bool]
@@ -124,7 +176,8 @@ def init_model(X, model_name, trial=None, params=None):
                 'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 20)
             }
         else:
-            model_params = {key: params[key] for key in ["n_estimators", "max_depth", "min_samples_split", "min_samples_leaf"]}
+            model_params = {key: params[key] for key in
+                            ["n_estimators", "max_depth", "min_samples_split", "min_samples_leaf"]}
         return RandomForestRegressor(**model_params), model_params
     elif model_name == 'lasso':
         if trial:
@@ -143,6 +196,18 @@ def init_model(X, model_name, trial=None, params=None):
             return create_nn(trial=trial), params
         else:
             return create_nn(params=params), params
+    elif model_name == 'lstm':
+        X_static, X_time = X
+        _, s = X_static.shape
+        _, t, f = X_time.shape
+        if trial:
+            params = {
+                "epochs": trial.suggest_int('epochs', 200, 1000),
+                "batch_size": trial.suggest_int('batch_size', 50, len(X_static))
+            }
+            return create_lstm(t=t, f=f, s=s, trial=trial), params
+        else:
+            return create_lstm(t=t, f=f, s=s, params=params), params
     elif model_name == 'xgb':
         if trial:
             model_params = {
@@ -154,12 +219,13 @@ def init_model(X, model_name, trial=None, params=None):
                 'alpha': trial.suggest_float('alpha', 1e-7, 100.0, log=True)
             }
         else:
-            model_params = {key: params[key] for key in ["max_depth", "learning_rate", "subsample", 'colsample_bytree', 'gamma', "alpha"]}
+            model_params = {key: params[key] for key in
+                            ["max_depth", "learning_rate", "subsample", 'colsample_bytree', 'gamma', "alpha"]}
         model_params["lambda"] = 0
         model_params["n_estimators"] = 300
-        return XGBRegressor(**model_params), model_params
+        return XGBRegressor(**model_params, random_state=SEED), model_params
     else:
-        raise AssertionError(f"Model name '{model_name}' is not in: ['svr', 'rf', 'lasso', 'nn']")
+        raise AssertionError(f"Model name '{model_name}' is not in: ['svr', 'rf', 'lasso', 'nn', 'lstm']")
 
 
 class OptunaOptimizer:
@@ -172,22 +238,23 @@ class OptunaOptimizer:
     :param best_params: usually None because that's the goal of optimization. But it can be used for model transfer
     :param feature_set_selection: (bool)
     :param feature_len_shrinking: (bool)
-    :param model_types: list of  model names to be considered. Subset of ['svr', 'rf', 'lasso', 'nn', 'xgb']
+    :param model_types: list of  model names to be considered. Subset of ['svr', 'rf', 'lasso', 'nn', 'xgb', 'lstm']
     :param sampler: optuna sampler
     :param num_folds: n-fold for CV. num_folds > n_unique_years results into leave-one-year-out-CV
     :param repetition_per_fold: make more reliable parameter choice by training models multiple times
     :param seed: for splitting years into folds for CV
     """
+
     def __init__(self,
                  X,
                  y,
                  years,
-                 predictor_names,
+                 predictor_names=None,
                  best_params=None,
                  feature_set_selection=True,
                  feature_len_shrinking=True,
                  max_feature_len=10,
-                 model_types=['svr', 'rf', 'lasso', 'nn', 'xgb'],
+                 model_types=['svr', 'rf', 'lasso', 'nn', "lstm", 'xgb'],
                  sampler=optuna.samplers.TPESampler,
                  num_folds=5,
                  repetition_per_fold=1):
@@ -211,8 +278,11 @@ class OptunaOptimizer:
     @ignore_warnings(category=ConvergenceWarning)
     def objective(self, trial):
 
-        # prepare X: feature selection & feature shrinking
-        X_trans, _ = self.transform_X(X=self.X, predictor_names=self.predictor_names, trial=trial)
+        if self.feature_set_selection | self.feature_len_shrinking:
+            # prepare X: feature selection & feature shrinking
+            X_trans, _ = self.transform_X(X=self.X, predictor_names=self.predictor_names, trial=trial)
+        else:
+            X_trans = self.X
 
         # It might happen that each and every feature is filtered out.
         # In that case we are left with the naive average predictor:
@@ -221,7 +291,12 @@ class OptunaOptimizer:
             return np.mean(self.y ** 2)
 
         # Select model type
-        model_name = trial.suggest_categorical('model_type', self.model_types)
+        if type(self.model_types) == str:
+            model_name = self.model_types
+        elif type(self.model_types) == list:
+            model_name = trial.suggest_categorical('model_type', self.model_types)
+        else:
+            raise AssertionError(f"Input for model_types is not str or list: {self.model_types}")
 
         # Generate params for model
         model, params = init_model(X=X_trans, model_name=model_name, trial=trial)
@@ -239,14 +314,18 @@ class OptunaOptimizer:
             for fold_out in np.unique(folds):
                 fold_out_bool = (folds == fold_out)
 
-                X_train, y_train = X_trans[~fold_out_bool], self.y[~fold_out_bool]
-                X_val, y_val = X_trans[fold_out_bool], self.y[fold_out_bool]
+                if model_name == "lstm":
+                    X_train, y_train = (X_trans[0][~fold_out_bool], X_trans[1][~fold_out_bool]), self.y[~fold_out_bool]
+                    X_val, y_val = (X_trans[0][fold_out_bool], X_trans[1][fold_out_bool]), self.y[fold_out_bool]
+                else:
+                    X_train, y_train = X_trans[~fold_out_bool], self.y[~fold_out_bool]
+                    X_val, y_val = X_trans[fold_out_bool], self.y[fold_out_bool]
 
                 # Fit the model and differentiate between the model classes
-                if model_name == 'nn':
+                if model_name in ["nn", "lstm"]:
                     model_copy = clone_model(model)
                     model_copy.set_weights(model.get_weights())
-                    model_copy.compile(optimizer="Adam", loss=model.loss)
+                    model_copy.compile(optimizer="adam", loss=model.loss)
                     # Train the Keras model
                     model_copy.fit(X_train, y_train,
                                    epochs=params["epochs"],
@@ -255,6 +334,8 @@ class OptunaOptimizer:
 
                     # Predict the target values
                     preds = model_copy.predict(X_val, verbose=0).flatten()
+                    # clear session
+                    #tf.keras.backend.clear_session()
                 else:
                     model_copy = deepcopy(model)
                     # Fit the model
@@ -267,8 +348,9 @@ class OptunaOptimizer:
                 fold_mse = mean_squared_error(y_val, preds)
                 mse_ls.append(fold_mse)
                 del model_copy
-                gc.collect()
-                #tf.keras.backend.clear_session()
+        #if model_name in ["nn", "lstm"]:
+            # clear session
+            #tf.keras.backend.clear_session()
         del model
         return np.mean(mse_ls)
 
@@ -293,7 +375,7 @@ class OptunaOptimizer:
         return self.best_mse, self.best_params
 
     @ignore_warnings(category=ConvergenceWarning)
-    def train_best_model(self, X, y, predictor_names):
+    def train_best_model(self, X, y, predictor_names=None):
         """
         This method applies the best parameters (found by optimization) to any dataset of X and y
         trains the optimal model and exports the model as well as the transformed X
@@ -305,26 +387,34 @@ class OptunaOptimizer:
         """
         assert self.best_params, ".apply() applies optimal parameters that are found by .optimize() or by setting them: self.best_params = {...}"
 
-        # transform X
-        X_trans, new_predictor_names = self.transform_X(X=X, predictor_names=predictor_names, params=self.best_params)
-
-        assert X_trans.shape[1] > 0, "There are no features left after selection & shrinking."
+        if self.feature_set_selection | self.feature_len_shrinking:
+            # transform X
+            X, new_predictor_names = self.transform_X(X=X, predictor_names=predictor_names, params=self.best_params)
+            assert X.shape[-1] > 0, "There are no features left after selection & shrinking."
 
         # initialize model
-        model, _ = init_model(X=X_trans, model_name=self.best_params["model_type"], params=self.best_params)
+        if type(self.model_types) == str:
+            model_type = self.model_types
+        else:
+            model_type = self.best_params["model_type"]
 
-        # Fit the model and diffrentiate between the model classes
-        if self.best_params["model_type"] == 'nn':
+        model, _ = init_model(X=X, model_name=model_type, params=self.best_params)
+
+        # Fit the model and differentiate between the model classes
+        if model_type in ['nn', "lstm"]:
             # Train the Keras model
-            model.fit(X_trans, y,
+            model.fit(X, y,
                       epochs=self.best_params["epochs"],
                       batch_size=self.best_params["batch_size"],
                       verbose=0)
         else:
             # Fit the model
-            model.fit(X_trans, y)
+            model.fit(X, y)
 
-        return X_trans, new_predictor_names, model
+        if self.feature_set_selection | self.feature_len_shrinking:
+            return X, new_predictor_names, model
+        else:
+            return model
 
     def transform_X(self, X, predictor_names, trial=None, params=None):
         # check if inputs are reasonable: xor on trial and params
@@ -335,7 +425,8 @@ class OptunaOptimizer:
             if trial:
                 X_sel, sel_predictor_names = select_features(X=X, predictor_names=predictor_names, trial=trial)
             else:
-                X_sel, sel_predictor_names = select_features(X=X, predictor_names=predictor_names, params=self.best_params)
+                X_sel, sel_predictor_names = select_features(X=X, predictor_names=predictor_names,
+                                                             params=self.best_params)
         else:
             X_sel = X.copy()
             sel_predictor_names = predictor_names.copy()
@@ -343,9 +434,11 @@ class OptunaOptimizer:
         # Feature Shrinking
         if self.feature_len_shrinking:
             if trial:
-                X_trans, new_predictor_names = self.shrink_features(X=X_sel, predictor_names=sel_predictor_names, trial=trial)
+                X_trans, new_predictor_names = self.shrink_features(X=X_sel, predictor_names=sel_predictor_names,
+                                                                    trial=trial)
             else:
-                X_trans, new_predictor_names = self.shrink_features(X=X_sel, predictor_names=sel_predictor_names, params=self.best_params)
+                X_trans, new_predictor_names = self.shrink_features(X=X_sel, predictor_names=sel_predictor_names,
+                                                                    params=self.best_params)
         else:
             X_trans = X_sel
             new_predictor_names = sel_predictor_names
@@ -371,7 +464,8 @@ class OptunaOptimizer:
 
             if trial:
                 # define feature length
-                feature_len = trial.suggest_int(ts_feature + '_len', 0, np.min([self.max_feature_len, sum(ts_feature_loc)]))
+                feature_len = trial.suggest_int(ts_feature + '_len', 0,
+                                                np.min([self.max_feature_len, sum(ts_feature_loc)]))
             else:
                 feature_len = params[ts_feature + '_len']
 

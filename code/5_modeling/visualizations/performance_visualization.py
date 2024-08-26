@@ -1,11 +1,9 @@
 import os
 
 import numpy as np
-from matplotlib import pyplot as plt
 import pandas as pd
 
 from config import RESULTS_DATA_DIR
-from optuna_modeling.run import open_run
 from visualizations.visualization_functions import plot_performance_map
 
 """
@@ -20,7 +18,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '0822_yield_anomaly_adm1__transfer_features_from_Tanzania_xgb_300_250_50_10'
+run_name = '0823_yield_anomaly_adm_transfer_features_from_Malawi_svr_300_150_50_5'
 #run = open_run(run_name=run_name)
 #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
 #for i, (name, model) in enumerate(model_dir.items()):

@@ -3,13 +3,10 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-from scipy.stats import kendalltau
 from sklearn.decomposition import PCA
 
-from config import PROCESSED_DATA_DIR, SEED
-from feature_selection import FeatureLearner
+from config import SEED, BASE_DIR
 
-import time
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -19,10 +16,9 @@ from tensorflow.keras.models import Model
 from data_loader import load_yield_data, load_my_cc, load_cluster_data, load_soil_data
 from optuna_modeling.feature_sets_for_optuna import feature_location_dict
 from data_assembly import process_list_of_feature_df, make_adm_column, make_X, make_dummies
-from optuna_modeling.run import list_of_runs, Run, open_run
+from run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer import OptunaOptimizer
 import optuna
-from tensorflow.keras import backend as K
 import tensorflow as tf
 tf.keras.config.disable_interactive_logging()
 tf.random.set_seed(SEED)
@@ -59,7 +55,7 @@ yield_df = make_adm_column(yield_df)
 cc_df = load_my_cc()
 
 # load and process features
-length = 3
+length = 10
 processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df,
                                                        feature_dict=feature_location_dict,
                                                        length=length,
@@ -79,7 +75,7 @@ soil_df.iloc[:, :] = StandardScaler().fit_transform(soil_df.values)
 
 # load clusters
 cluster_df = load_cluster_data()
-yield_df = pd.merge(yield_df, cluster_df, how="left") # , on=["country", "adm1", "adm2"]
+yield_df = pd.merge(yield_df, cluster_df, how="left")  # , on=["country", "adm1", "adm2"]
 
 # INITIALIZATION #######################################################################################################
 
@@ -92,16 +88,16 @@ assert data_split in yield_df.columns, f"The chosen cluster-set '{data_split}' i
 objective = "yield_anomaly"
 
 # choose timeout
-timeout = 1800
+timeout = 60 * 60 * 3
 # choose duration (sec) of optimization using optuna
-n_trials = 200
+n_trials = 300
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
 num_folds = 5
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0822_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0826_{objective}_{data_split}_transferable-lstm_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -112,14 +108,15 @@ if run_name in list_of_runs():
     yield_df["train_mse"] = pd.to_numeric(yield_df["train_mse"])
     yield_df["y_pred"] = pd.to_numeric(yield_df["y_pred"])
     yield_df["n_opt_trials"] = pd.to_numeric(yield_df["n_opt_trials"])
+    run.trans_dir = run.run_dir / "transfer_features"
 else:
     run = Run(name=run_name,
               cluster_set=data_split,
-              model_types=["nn"],
+              model_types="lstm",
               timeout=timeout,
               n_trials=n_trials,
               n_startup_trials=n_startup_trials,
-              python_file=os.path.abspath(__file__))
+              python_file=BASE_DIR / "code/5_modeling/optuna_modeling/transfer_learning_source_model_lstm.py") #os.path.abspath(__file__))
     run.trans_dir = run.run_dir / "transfer_features"
     os.mkdir(run.trans_dir)
 
@@ -130,43 +127,59 @@ else:
     run.save_predictions(prediction_df=yield_df)
 
 # define target and year
-y = yield_df[objective]
-years = yield_df.harv_year
+y = yield_df[objective].values.astype("float32")
+years = yield_df.harv_year.values
 
 # prepare predictors # [cluster_yield_df.harv_year] +
-predictors_list = [yield_df.harv_year] + [df.loc[yield_df.index] for df in processed_feature_df_dict.values()]
+predictors_list = [yield_df.harv_year]
 # add dummies for regions
 predictors_list.append(soil_df.loc[yield_df.index])
 predictors_list.append(make_dummies(yield_df))
-
-# form the regressor-matrix X
-X, feature_names = make_X(df_ls=predictors_list, standardize=True)
+# form the static regressor-matrix X_static
+X_static, static_feature_names = make_X(df_ls=predictors_list, standardize=True)
+# time sensitive features with shape (n x t x f) (samples x timeseries-lenght x features)
+X_time = np.array([df.values.T for df in processed_feature_df_dict.values()], dtype='f').transpose()
+# unite
+X = (X_static.astype("float32"), X_time.astype("float32"))
 
 # INFERENCE ############################################################################################################
 
 for source_name, source_yield_df in yield_df.groupby(data_split):
-
+    #break
     # in case you loaded an existing run, you can skip the clusters already predicted
     if np.all(~source_yield_df["y_pred"].isna()):
         continue
 
     # extract source data
     source_ix = source_yield_df.index
-    X_source = X[source_ix]
+    X_static_source = X_static[source_ix]
+    X_time_source = X_time[source_ix]
     y_source = y[source_ix]
     years_source = years[source_ix]
 
     # further filter the dummy features for non-source regions
     non_source_adm = yield_df.loc[~yield_df.index.isin(source_ix), "adm"].unique()
-    non_source_ix = np.array([feature in non_source_adm for feature in feature_names])
-    X_source = X_source[:, ~non_source_ix]
-    X_ = X[:, ~non_source_ix]
-    feature_names_ = feature_names[~non_source_ix]
+    non_source_ix = np.array([feature in non_source_adm for feature in static_feature_names])
+    X_static_source = X_static_source[:, ~non_source_ix]
+    X_static_ = X_static[:, ~non_source_ix]
+    static_feature_names_ = static_feature_names[~non_source_ix]
+    # unite
+    X_ = (X_static_, X_time)
+
+    # hyperparameter-selection using optuna
+    sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, seed=SEED) # , multivariate=True, warn_independent_sampling=False,
+    opti = OptunaOptimizer(X=X_, y=y, years=years,
+                           sampler=sampler,
+                           model_types=run.model_types,
+                           feature_set_selection=False, feature_len_shrinking=False,
+                           num_folds=num_folds)
+
+    mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
+                                     show_progress_bar=True, print_result=False, n_jobs=6)
 
     # LOYOCV - leave one year out cross validation
     for year_out in np.unique(years_source):
-        #if year_out==2016:
-        #    break
+        # year_out=2016
         year_out_bool = (years_source == year_out)
 
         # in case you loaded an existing run, you can skip the year already predicted
@@ -174,24 +187,12 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
             continue
 
         # split the data
-        X_train, y_train, years_train = X_source[~year_out_bool], y_source[~year_out_bool], years_source[~year_out_bool]
-        X_test, y_test = X_source[year_out_bool], y_source[year_out_bool]
+        X_train, y_train, years_train = (X_static_source[~year_out_bool], X_time_source[~year_out_bool]), y_source[~year_out_bool], years_source[~year_out_bool]
+        X_test, y_test = (X_static_source[year_out_bool], X_time_source[year_out_bool]), y_source[year_out_bool]
         print(source_name, year_out, f"\nmse(train)={round(np.mean(y_train ** 2), 3)}")
 
-        # hyperparameter-selection using optuna
-        sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True,
-                                             warn_independent_sampling=False, seed=SEED)
-        opti = OptunaOptimizer(X=X_train, y=y_train, years=years_train, predictor_names=feature_names_,
-                               sampler=sampler,
-                               model_types=run.model_types,
-                               feature_set_selection=False, feature_len_shrinking=False,
-                               num_folds=num_folds)
-
-        mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
-                                         show_progress_bar=True, print_result=False, n_jobs=-1)
-
         # train best model
-        _, _, trained_model = opti.train_best_model(X=X_train, y=y_train, predictor_names=feature_names_)
+        trained_model = opti.train_best_model(X=X_train, y=y_train)
 
         # predict train- & test-data
         y_pred_train = trained_model.predict(X_train).T[0]
@@ -223,21 +224,31 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
             print(f"{source_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)}")
 
         # save trained model and best params
-        trained_model.feature_names = feature_names_
-        opti.best_params["feature_names"] = feature_names_
-        run.save_model_and_params(name=f"{source_name}_{year_out}", model=trained_model, params=opti.best_params)
+        trained_model.feature_names = static_feature_names_
+        opti.best_params["feature_names"] = static_feature_names_
+        run.save_model_and_params(name=f"{source_name}_{year_out}", model=trained_model, params=opti.best_params, model_type="lstm")
 
         # extract learned features for all data by taking results of last hidden layer
-        transfer_model = Model(inputs=trained_model.layers[0].input, outputs=trained_model.layers[-3].output)
-        # Use the encoder model to transform the data
-        transfer_features = transfer_model.predict(X_)
-        transfer_feature_df = pd.DataFrame(transfer_features, columns=[f"transfer_feature_{i + 1}" for i in range(transfer_features.shape[1])])
+        transfer_feature_mtx = []
+        # get last weights before network output
+        last_weights = trained_model.layers[-1].get_weights()
+        # set all weights to zero
+        last_weights[0] *= 0
+        last_weights[1] *= 0
+        # for each unit set weight to 1 so the networks output is the output of that hidden unit
+        for i in range(best_params["hidden_units"]):
+            last_weights[0] *= 0
+            last_weights[0][i] = 1
+            trained_model.layers[-1].set_weights(last_weights)
+            transfer_feature_mtx.append(trained_model.predict(X_, verbose=0))
+
+        transfer_feature_df = pd.DataFrame(np.hstack(transfer_feature_mtx), columns=[f"transfer_feature_{i + 1}" for i in range(best_params["hidden_units"])])
         transfer_feature_df = pd.concat([yield_df[["country", "adm1", "adm2", "adm", "harv_year"]], transfer_feature_df], axis=1)
         transfer_feature_df.to_csv(run.trans_dir / f"{source_name}_{year_out}.csv", index=False)
 
         # After each model is done
+        tf.keras.backend.clear_session()
         del trained_model
-        del transfer_model
 
         # save predictions and performance
         run.save_predictions(prediction_df=yield_df)

@@ -39,7 +39,7 @@ class Run:
         self.run_dir = self.create_folders()
 
         # save copy of python code that created the run
-        shutil.copy(python_file, self.run_dir / python_file.split("\\")[-1])
+        shutil.copy(python_file, self.run_dir / str(python_file).split("\\")[-1])
 
         # save that run
         self.save()
@@ -176,17 +176,16 @@ class Run:
 
         return params_df, feature_ls_ls
 
-
-    def save_model_and_params(self, name, model, params):
+    def save_model_and_params(self, name, model, params, model_type):
         # save params dict
         with open(self.run_dir / f"params/{name}.pkl", 'wb') as f:
             # Pickle using the highest protocol available.
             pickle.dump(params, f, pickle.HIGHEST_PROTOCOL)
 
         # save the model
-        if params["model_type"] != "nn":
+        if model_type in ["nn", "lstm"]:
+            model.save(self.run_dir / f"models/{name}.keras")
+        else:
             with open(self.run_dir / f"models/{name}.pkl", 'wb') as f:
                 # Pickle using the highest protocol available.
                 pickle.dump(model, f, pickle.HIGHEST_PROTOCOL)
-        else:
-            model.save(self.run_dir / f"models/{name}.keras")

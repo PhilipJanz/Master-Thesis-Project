@@ -188,11 +188,9 @@ print(f"{cluster_name} finished with: NSE = {np.round(nse, 2)}")
 import os
 
 import numpy as np
-from matplotlib import pyplot as plt
 import pandas as pd
 
 from config import RESULTS_DATA_DIR
-from optuna_modeling.run import open_run
 
 """
 This script unfolds the yield estimation performance by giving metrics for each cluster set and model.

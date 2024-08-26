@@ -1,7 +1,5 @@
 import os
 
-from optuna.exceptions import ExperimentalWarning
-
 from config import SEED
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -9,16 +7,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 from sklearn.decomposition import PCA
 
-import time
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
-from sklearn.utils._testing import ignore_warnings
 
 from data_loader import load_cluster_data, load_soil_data
 from data_assembly import make_adm_column, make_X, make_dummies
-from optuna_modeling.run import list_of_runs, Run, open_run
+from run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer import OptunaOptimizer
 import optuna
 
@@ -45,7 +40,10 @@ There are two main loops:
 
 # source model
 source_run_name = "0819_yield_anomaly_country_transferable-nn_3_1800_200_50_5"
-source_name = "Tanzania"
+source_name = "Malawi"
+
+# Sleep for 5 hours (5 hours * 60 minutes/hour * 60 seconds/minute)
+#time.sleep(5 * 60 * 60)
 
 source_run = open_run(source_run_name)
 yield_df = source_run.load_prediction()
@@ -71,25 +69,25 @@ yield_df = pd.merge(yield_df, cluster_df, how="left")  # , on=["country", "adm1"
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
 yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
 yield_df.loc[yield_df["country"] == "Tanzania", "adm1_"] = "Tanzania"
-cluster_set = "adm1_"
+cluster_set = "adm"
 assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
 
 # define objective (target)
 objective = "yield_anomaly"
 
 # choose model or set of models that are used
-model_types = ["xgb"]
+model_types = ["lasso"]
 # choose timeout
 timeout = 300
 # choose duration (sec) of optimization using optuna
-n_trials = 250
+n_trials = 100
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
 num_folds = 5
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0822_{objective}_{cluster_set}_transfer_features_from_{source_name}_{'-'.join(model_types)}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0823_{objective}_{cluster_set}_transfer_features_from_{source_name}_{'-'.join(model_types)}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -237,6 +235,9 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         trained_model.feature_names = feature_names
         opti.best_params["feature_names"] = feature_names
         run.save_model_and_params(name=f"{cluster_name}_{year_out}", model=trained_model, params=opti.best_params)
+
+        # save predictions
+        run.save_predictions(prediction_df=yield_df)
 
     preds = yield_df.loc[cluster_yield_df.index]["y_pred"]
     y_ = y[~preds.isna()]
