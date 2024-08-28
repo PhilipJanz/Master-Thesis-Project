@@ -13,7 +13,7 @@ from xgboost import XGBRegressor
 
 import tensorflow as tf
 
-tf.keras.config.disable_interactive_logging()
+#tf.keras.config.disable_interactive_logging()
 tf.random.set_seed(SEED)
 from tensorflow.keras import Sequential
 from tensorflow.keras.models import clone_model, Model
@@ -242,9 +242,7 @@ class OptunaOptimizer:
     :param sampler: optuna sampler
     :param num_folds: n-fold for CV. num_folds > n_unique_years results into leave-one-year-out-CV
     :param repetition_per_fold: make more reliable parameter choice by training models multiple times
-    :param seed: for splitting years into folds for CV
     """
-
     def __init__(self,
                  X,
                  y,

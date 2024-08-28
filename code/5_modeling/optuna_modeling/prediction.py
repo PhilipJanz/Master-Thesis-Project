@@ -1,5 +1,7 @@
 import os
 
+from config import BASE_DIR
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
@@ -52,7 +54,7 @@ assert len(yield_df) == 1775
 cc_df = load_my_cc()
 
 # load and process features
-length = 1
+length = 3
 processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df,
                                                        feature_dict=feature_location_dict,
                                                        length=length,
@@ -106,26 +108,26 @@ assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}'
 objective = "yield_anomaly"
 
 # corr test alpha for selecting important features
-alpha = 0.1
+alpha = None
 
 # vif threshold
-vif_threshold = None
+vif_threshold = 5
 
 # choose model or set of models that are used
-model_types = ["lasso"]
+model_type = "lasso"
 # choose max feature len for feature shrinking
 #max_feature_len = 1
 # choose timeout
-timeout = 300
+timeout = 30
 # choose duration (sec) of optimization using optuna
 n_trials = 100
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
-num_folds = 30
+num_folds = 5
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0812_{objective}_{cluster_set}_{'-'.join(model_types)}_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0828_{objective}_{cluster_set}_{model_type}_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 if alpha:
     run_name += f"_corrtest{alpha}"
 if vif_threshold:
@@ -144,17 +146,18 @@ if run_name in list_of_runs():
 else:
     run = Run(name=run_name,
               cluster_set=cluster_set,
-              model_types=model_types,
+              model_types=model_type,
               timeout=timeout,
               n_trials=n_trials,
               n_startup_trials=n_startup_trials,
-              python_file=os.path.abspath(__file__))
+              python_file=BASE_DIR / "code/5_modeling/optuna_modeling/prediction.py") #os.path.abspath(__file__))
 
     # columns to be filled with predictions
     yield_df["train_mse"] = np.nan
     yield_df["y_pred"] = np.nan
     yield_df["best_model"] = np.nan
     yield_df["n_opt_trials"] = np.nan
+    run.save_predictions(prediction_df=yield_df)
 
 # INFERENCE ############################################################################################################
 
@@ -199,6 +202,10 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
     for year_out in np.unique(years):
         year_out_bool = (years == year_out)
 
+        # in case you loaded an existing run, you can skip the year already predicted
+        if np.all(~cluster_yield_df[year_out_bool]["y_pred"].isna()):
+            continue
+
         X_train, y_train, years_train = X[~year_out_bool], y[~year_out_bool], years[~year_out_bool]
         X_test, y_test = X[year_out_bool], y[year_out_bool]
 
@@ -211,15 +218,15 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
                                                                               alpha=alpha)
         else:
             sel_feature_names_ = sel_feature_names.copy()
-        """
-        if not indicator_feature_ls:
+        indicator_loc = [feature in indicator_names for feature in sel_feature_names_]
+
+        if not any(indicator_loc):
             # in this case just output 0 as the best estimator for yield anomaly in that scenario
             yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
             yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
             yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.mean(y_train ** 2)
             yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = 0
             continue
-        """
 
         print(cluster_name, year_out, "selected features: ", sel_feature_names_, "\nmse(y_train)=", np.mean((y_train - np.mean(y_train)) ** 2))
 
@@ -229,96 +236,64 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
                                sampler=sampler,
                                model_types=run.model_types,
                                feature_set_selection=False, feature_len_shrinking=False,
-                               num_folds=num_folds, seed=42)
+                               num_folds=num_folds)
 
         mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
                                          show_progress_bar=True, print_result=False)
 
 
         # train best model
-        X_train_trans, optuna_selected_feature_names, trained_model = opti.train_best_model(X=X_train, y=y_train,
-                                                                                            predictor_names=sel_feature_names_)
+        trained_model = opti.train_best_model(X=X_train, y=y_train)
 
-        if opti.best_params["model_type"] == "xgb":
-
-            indicator_feature_ls = [sel_feature for sel_feature in optuna_selected_feature_names if np.any([feature in sel_feature for feature in list(processed_feature_df_dict.keys())])]
-            if not indicator_feature_ls:
+        if model_type == "xgb":
+            if np.all(trained_model.feature_importances_[indicator_loc] < 1e-3):
+                # in this case just output 0 as the best estimator for yield anomaly in that scenario
+                yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
+                yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
+                yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.mean(y_train ** 2)
+                yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
+                continue
+        if model_type == "lasso":
+            if np.all(trained_model.coef_[indicator_loc] == 0):
                 # in this case just output 0 as the best estimator for yield anomaly in that scenario
                 yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
                 yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
                 yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.var(y_train)
                 yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
                 continue
-        if opti.best_params["model_type"] == "lasso":
-            if np.all(trained_model.coef_[optuna_selected_feature_names != "harv_year"] == 0):
-                # in this case just output 0 as the best estimator for yield anomaly in that scenario
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.var(y_train)
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
-                continue
-
-        # prepare test-data
-        X_test_trans, _ = opti.transform_X(X=X_test, predictor_names=sel_feature_names_, params=opti.best_params)
 
         # predict train- & test-data
-        y_pred_train = trained_model.predict(X_train_trans)
-        y_pred = trained_model.predict(X_test_trans)
+        y_pred_train = trained_model.predict(X_train)
+        y_pred_test = trained_model.predict(X_test)
 
         # write the predictions into the result df
-        yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.mean((y_pred_train - y_train) ** 2)
-        yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = y_pred
-        yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = opti.best_params['model_type']
+        train_mse = np.mean((y_pred_train - y_train) ** 2)
+        if objective == "yield_anomaly":
+            train_nse = 1 - train_mse / np.mean(y_train ** 2)
+        else:
+            train_nse = 1 - train_mse / np.mean((y_train - np.mean(y_train)) ** 2)
+        test_mse = np.mean((y_pred_test - y_test) ** 2)
+        yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = train_mse
+        yield_df.loc[cluster_yield_df.index[year_out_bool], "train_nse"] = train_nse
+        yield_df.loc[cluster_yield_df.index[year_out_bool], "test_mse"] = test_mse
+        if len(y_test) > 3:
+            if objective == "yield_anomaly":
+                test_nse = 1 - test_mse / np.mean(y_test ** 2)
+            else:
+                test_nse = 1 - test_mse / np.mean((y_test - np.mean(y_test)) ** 2)
+        else:
+            test_nse = None
+        yield_df.loc[cluster_yield_df.index[year_out_bool], "test_nse"] = test_nse
+        yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = y_pred_test
         yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
+        if test_nse:
+            print(f"{cluster_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)} ({round(test_nse, 2)})")
+        else:
+            print(f"{cluster_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)}")
 
-        # save trained model and best params
-        trained_model.feature_names = optuna_selected_feature_names
-        opti.best_params["feature_names"] = optuna_selected_feature_names
-        run.save_model_and_params(name=f"{cluster_name}_{year_out}", model=trained_model, params=opti.best_params)
+        # save predictions and performance
+        run.save_predictions(prediction_df=yield_df)
 
-        if sum((y_test - np.mean(y_test)) ** 2) != 0:
-            print(f"{year_out} finished with nse: {1 - sum((y_pred - y_test) ** 2) / sum((y_test - np.mean(y_test)) ** 2)}")
-
-        """
-        # Plotting:
-        optuna_alpha = best_params["alpha"]
-        train_mse = []
-        test_mse = []
-        y_preds = []
-        alphas = np.exp(np.arange(-20.8, 0, 0.2))
-        for alpha in alphas:
-            opti.best_params["alpha"] = alpha
-            X_train_trans, new_predictor_names, trained_model = opti.train_best_model(X=X_train, y=y_train,
-                                                                                      predictor_names=predictor_names)
-
-            # prepare test-data
-            X_test_trans, _ = opti.transform_X(X=X_test, predictor_names=predictor_names, params=opti.best_params)
-
-            # predict train- & test-data
-            y_pred_train = trained_model.predict(X_train_trans)
-            y_pred = trained_model.predict(X_test_trans)
-            y_preds.append(y_pred)
-
-            # write the predictions into the result df
-            train_mse.append(np.mean((y_pred_train - y_train) ** 2))
-            test_mse.append(np.mean((y_pred - y_test) ** 2))
-
-
-        plt.plot(alphas, test_mse, label=f"test mse (min at {alphas[np.argmin(test_mse)]})")
-        plt.plot(alphas, train_mse, label=f"train mse (min at {alphas[np.argmin(train_mse)]})")
-        plt.hlines(y_test ** 2, xmin=alphas[0], xmax=alphas[-1], color="red", linestyles="dotted",
-                   label="zero-predictor", alpha=0.8)
-        plt.vlines(optuna_alpha, ymin=np.min([test_mse, train_mse]), ymax=np.max([test_mse, train_mse]),
-                   color="tab:green", linestyles="dashed", label=f"optuna best parameter: {optuna_alpha}", alpha=0.8)
-        plt.xlabel("alpha")
-        plt.ylabel("mse")
-        plt.title(f"LOYOCV test on {cluster_name} hold-out: {year_out}")
-        # plt.yscale("log")
-        plt.xscale("log")
-        plt.legend()
-        plt.savefig(run.run_dir / f"plots/regional/alpha_choice_{cluster_name}_{year_out}.png")
-        plt.close()
-        """
 
     preds = yield_df.loc[cluster_yield_df.index]["y_pred"]
     y_ = y[~preds.isna()]

@@ -2,7 +2,6 @@
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
-from mlxtend.feature_selection import SequentialFeatureSelector
 from scipy.stats import kendalltau
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from xgboost import XGBRegressor
