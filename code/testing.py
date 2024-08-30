@@ -211,7 +211,7 @@ n_adm_ls = []
 num_nse_above0_ls = []
 num_nse_above03_ls = []
 for run_name in os.listdir(pred_result_dir):
-    if run_name == "old":
+    if run_name in ["old", "yield"]:
         continue
 
     if "anomaly" in run_name:

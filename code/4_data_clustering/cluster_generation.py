@@ -1,3 +1,7 @@
+import os
+
+os.environ["OMP_NUM_THREADS"] = "1"
+
 import numpy as np
 import pandas as pd
 
@@ -19,14 +23,17 @@ Finally a visualization should help to understand whats happening.
 # load crop calendar
 cc_df = load_my_cc()
 cc_df = cc_df[~cc_df.country.isin(["Ethiopia", "Kenya"])]
+cc_df = cc_df[~cc_df.adm2.isin(["Likoma"])].reset_index()
 
 # load RS data
 ndvi_df = pd.read_csv(PROCESSED_DATA_DIR / "remote sensing/smooth_ndvi_regional_matrix.csv", keep_default_na=False)
 ndvi_df = ndvi_df[~ndvi_df.country.isin(["Ethiopia", "Kenya"])]
+ndvi_df = ndvi_df[~ndvi_df.adm2.isin(["Likoma"])].reset_index()
 
 # load precipitation data
 preci_df = pd.read_csv(PROCESSED_DATA_DIR / "climate/pr_sum_regional_matrix.csv", keep_default_na=False)
 preci_df = preci_df[~preci_df.country.isin(["Ethiopia", "Kenya"])]
+preci_df = preci_df[~preci_df.adm2.isin(["Likoma"])].reset_index()
 
 # check check
 assert np.all(cc_df.iloc[:, :3].values == ndvi_df.iloc[:, :3].values)
@@ -58,21 +65,21 @@ season_diff_preci_profile_mtx = [np.diff(x) for x in season_preci_profile_mtx]
 # make cluster based on smoothed NDVI values
 kmean_elbow(data_mtx=season_ndvi_profile_mtx, max_k=21)
 # choose k
-k = 10
+k = 7
 labels, _ = kmean_cluster(data_mtx=season_ndvi_profile_mtx, n_clusters=k)
 cc_df[f"ndvi-{k}_cluster"] = labels
 
 # make cluster based on diff NDVI values
 kmean_elbow(data_mtx=season_diff_ndvi_profile_mtx, max_k=21)
 # choose k
-k = 6
+k = 3
 labels, _ = kmean_cluster(data_mtx=season_diff_ndvi_profile_mtx, n_clusters=k)
 cc_df[f"diff_ndvi-{k}_cluster"] = labels
 
 # make cluster based on precipitation values
 kmean_elbow(data_mtx=season_preci_profile_mtx, max_k=21)
 # choose k
-k = 10
+k = 7
 labels, _ = kmean_cluster(data_mtx=season_preci_profile_mtx, n_clusters=k)
 cc_df[f"preci-{k}_cluster"] = labels
 
@@ -141,5 +148,5 @@ clustered_yield_df = pd.merge(yield_df, cc_df, how="left", on=["country", "adm1"
 # make cluster validation plot for selected clusters
 cluster_validation_plot(clustered_yield_df=clustered_yield_df,
                         correlation_matrix=correlation_matrix,
-                        cluster_columns=[f"ndvi-{k}_cluster", f"diff_ndvi-{k}_cluster", f"preci-{k}_cluster", f"diff_preci-{k}_cluster"],
+                        cluster_columns=[col for col in cc_df.columns if "cluster" in col],
                         cluster_names=["NDVI", "Diff-NDVI", "Precipitation", "Diff-Precipitation"])

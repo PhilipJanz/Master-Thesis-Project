@@ -1,5 +1,6 @@
 import os
 import pickle
+import joblib
 import shutil
 
 import numpy as np
@@ -52,6 +53,7 @@ class Run:
         os.mkdir(run_dir)
         os.mkdir(run_dir / "models")
         os.mkdir(run_dir / "params")
+        os.mkdir(run_dir / "optuna_studies")
         os.mkdir(run_dir / "plots")
         os.mkdir(run_dir / "plots/regional")
         os.mkdir(run_dir / "plots/overall")
@@ -73,12 +75,18 @@ class Run:
         assert "y_pred" in prediction_df.columns, "'y_pred' is not in the prediction-df."
 
         # init performance dict that will become a dataframe
-        performance_dict = {'country': [], 'adm1': [], 'adm2': [], cluster_set: [],
-                            "avg_opt_trials": [], "avg_train_mse": [], "mse": [], "nse": []}
+        if cluster_set == "all":
+            performance_dict = {'country': [], 'adm1': [], 'adm2': [],
+                                "avg_opt_trials": [], "avg_train_mse": [], "mse": [], "nse": []}
+        else:
+            performance_dict = {'country': [], 'adm1': [], 'adm2': [], cluster_set: [],
+                                "avg_opt_trials": [], "avg_train_mse": [], "mse": [], "nse": []}
 
         # fill performance dict for each admin
         for adm, adm_prediction_df in prediction_df.groupby("adm"):
             for col in list({'country', 'adm1', 'adm2', cluster_set}):
+                if col == "all":
+                    continue
                 performance_dict[col].append(adm_prediction_df[col].iloc[0])
 
             performance_dict["avg_opt_trials"].append(np.mean(adm_prediction_df["n_opt_trials"]))
@@ -89,6 +97,20 @@ class Run:
 
         # save it
         pd.DataFrame(performance_dict).to_csv(self.run_dir / "performance.csv", index=False)
+
+    def save_optuna_study(self, study):
+        study_path = self.run_dir / f"optuna_studies/{study.study_name}.pkl"
+        # save it
+        joblib.dump(study, study_path)
+        return None
+
+    def try_load_optuna_study(self, study_name):
+        existing_studies = os.listdir(self.run_dir / f"optuna_studies")
+        if study_name in [file_name.replace(".pkl", "") for file_name in existing_studies]:
+            return joblib.load(self.run_dir / f"optuna_studies/{study_name}.pkl")
+        else:
+            return None
+
 
     def load_prediction(self):
         return pd.read_csv(self.run_dir / "prediction.csv", keep_default_na=False)

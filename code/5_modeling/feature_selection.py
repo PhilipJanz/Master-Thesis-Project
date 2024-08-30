@@ -182,18 +182,6 @@ class FeatureLearner():
         plt.show()
 
 
-def backwards_feature_selection(X, y, feature_names):
-    assert X.shape[1] == len(feature_names)
-
-    # backward selection feature selection
-    backward_fs = SequentialFeatureSelector(XGBRegressor(), forward=False, k_features="best")
-
-    X_select = backward_fs.fit_transform(X, y)
-    selected_feature_names = [feature_names[i] for i in backward_fs.k_feature_idx_]
-
-    return X_select, selected_feature_names, backward_fs
-
-
 def calculate_vif(X, feature_names):
     """
     Calculate the Variance Inflation Factor (VIF) for each feature.

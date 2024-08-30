@@ -20,7 +20,7 @@ from run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer import OptunaOptimizer
 import optuna
 import tensorflow as tf
-tf.keras.config.disable_interactive_logging()
+#tf.keras.config.disable_interactive_logging()
 tf.random.set_seed(SEED)
 
 # silence the message after each trial
@@ -81,8 +81,8 @@ yield_df = pd.merge(yield_df, cluster_df, how="left")  # , on=["country", "adm1"
 
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
 yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
-data_split = "country"
-assert data_split in yield_df.columns, f"The chosen cluster-set '{data_split}' is not occuring in the yield_df."
+data_split = "all"
+#assert data_split in yield_df.columns, f"The chosen cluster-set '{data_split}' is not occuring in the yield_df."
 
 # define objective (target)
 objective = "yield_anomaly"
@@ -90,14 +90,14 @@ objective = "yield_anomaly"
 # choose timeout
 timeout = 60 * 60 * 3
 # choose duration (sec) of optimization using optuna
-n_trials = 300
+n_trials = 250
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
-n_startup_trials = 50
+n_startup_trials = 100
 # folds of optuna hyperparameter search
 num_folds = 5
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0826_{objective}_{data_split}_transferable-lstm_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0829_{objective}_{data_split}_transferable-lstm_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -144,7 +144,10 @@ X = (X_static.astype("float32"), X_time.astype("float32"))
 
 # INFERENCE ############################################################################################################
 
-for source_name, source_yield_df in yield_df.groupby(data_split):
+#for source_name, source_yield_df in yield_df.groupby(data_split):
+source_name = data_split
+source_yield_df = yield_df
+for _ in [0]:
     #break
     # in case you loaded an existing run, you can skip the clusters already predicted
     if np.all(~source_yield_df["y_pred"].isna()):
@@ -167,15 +170,17 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
     X_ = (X_static_, X_time)
 
     # hyperparameter-selection using optuna
-    sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, seed=SEED) # , multivariate=True, warn_independent_sampling=False,
-    opti = OptunaOptimizer(X=X_, y=y, years=years,
+    sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, seed=SEED, multivariate=True, warn_independent_sampling=False) #
+    opti = OptunaOptimizer(study_name=f"{source_name}", #_{year_out}",
+                           X=X_, y=y, years=years,
                            sampler=sampler,
                            model_types=run.model_types,
                            feature_set_selection=False, feature_len_shrinking=False,
                            num_folds=num_folds)
 
     mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
-                                     show_progress_bar=True, print_result=False, n_jobs=6)
+                                     show_progress_bar=True, print_result=False, n_jobs=-1)
+    run.save_optuna_study(study=opti.study)
 
     # LOYOCV - leave one year out cross validation
     for year_out in np.unique(years_source):

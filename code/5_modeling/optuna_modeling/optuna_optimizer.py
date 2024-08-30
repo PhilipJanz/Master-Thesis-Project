@@ -89,7 +89,7 @@ def create_lstm(t, f, s, trial=None, params=None):
         # Concatenate with static data
         merged = concatenate([static_input, lstm_out])
         # init last hidden layer
-        dense_out = Dense(units=trial.suggest_int(f'hidden_units', 1, 32), activation='sigmoid')(merged)
+        dense_out = Dense(units=trial.suggest_categorical(f'hidden_units', [2, 4, 8, 16, 32, 64]), activation='sigmoid')(merged)
     else:
         # dropout after input
         input_dropout = params[f'input_dropout']
@@ -190,8 +190,8 @@ def init_model(X, model_name, trial=None, params=None):
     elif model_name == 'nn':
         if trial:
             params = {
-                "epochs": trial.suggest_int('epochs', 200, 1000),
-                "batch_size": trial.suggest_int('batch_size', 50, len(X))
+                "epochs": trial.suggest_categorical('epochs', [100, 200, 500, 1000]),
+                "batch_size": trial.suggest_categorical('batch_size', [50, 100, 200, 400, 800])
             }
             return create_nn(trial=trial), params
         else:
@@ -202,8 +202,8 @@ def init_model(X, model_name, trial=None, params=None):
         _, t, f = X_time.shape
         if trial:
             params = {
-                "epochs": trial.suggest_int('epochs', 200, 1000),
-                "batch_size": trial.suggest_int('batch_size', 50, len(X_static))
+                "epochs": trial.suggest_categorical('epochs', [100, 200, 500, 1000]),
+                "batch_size": trial.suggest_categorical('batch_size', [50, 100, 200, 400, 800])
             }
             return create_lstm(t=t, f=f, s=s, trial=trial), params
         else:
@@ -244,6 +244,7 @@ class OptunaOptimizer:
     :param repetition_per_fold: make more reliable parameter choice by training models multiple times
     """
     def __init__(self,
+                 study_name,
                  X,
                  y,
                  years,
@@ -271,7 +272,7 @@ class OptunaOptimizer:
         self.max_feature_len = max_feature_len
 
         # Create a new Optuna study
-        self.study = optuna.create_study(direction="minimize", sampler=sampler)
+        self.study = optuna.create_study(study_name=study_name, direction="minimize", sampler=sampler)
 
     @ignore_warnings(category=ConvergenceWarning)
     def objective(self, trial):

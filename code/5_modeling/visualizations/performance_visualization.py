@@ -2,9 +2,11 @@ import os
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from config import RESULTS_DATA_DIR
-from visualizations.visualization_functions import plot_performance_map
+from run import open_run
+from visualizations.visualization_functions import plot_performance_map, plot_map
 
 """
 This script unfolds the yield estimation performance by giving metrics for each cluster set and model.
@@ -18,7 +20,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '0828_yield_anomaly_adm1__xgb_3_300_250_50_5_corrtest0.05'
+run_name = '0830_yield_anomaly_adm_transfer_features_from_all_lasso_300_100_20_10'
 #run = open_run(run_name=run_name)
 #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
 #for i, (name, model) in enumerate(model_dir.items()):
@@ -62,3 +64,6 @@ print(run_name, "avg NSE:", np.round(np.mean(performance_dict["nse"]), 2))
 
 # plot results as a map
 plot_performance_map(performance_data=performance_df, performance_column="nse", result_filename=run_name)
+
+#plot_map(df=result_df.groupby("adm")["country"].count().reset_index(name="count"), column="count", title="Number of yield datapoint after filtering",
+#         cmap="YlGn", cmap_range=(0, 25), save_path=None)

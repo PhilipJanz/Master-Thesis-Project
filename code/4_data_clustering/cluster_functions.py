@@ -8,6 +8,7 @@ from scipy.optimize import curve_fit
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 import seaborn as sns
+from sklearn.metrics import silhouette_score
 
 from crop_calendar.crop_calendar_functions import detect_seasons
 from crop_calendar.profile_generation import make_profiles
@@ -26,23 +27,36 @@ def kmean_cluster(data_mtx, n_clusters):
 
 
 def kmean_elbow(data_mtx, max_k=10):
-    # Let's find the optimal number of clusters using within-cluster variance (Elbow method)
     wcss_ls = []  # List to hold the within-cluster sum of squares
-    k_values = range(1, max_k)  # We will test k from 1 to 10
+    silhouette_ls = []  # List to hold the silhouette scores
+    k_values = range(2, max_k+1)  # We will test k from 2 to max_k
 
     for k in k_values:
-        _, wcss = kmean_cluster(data_mtx, n_clusters=k)
+        labels, wcss = kmean_cluster(data_mtx, n_clusters=k)
         wcss_ls.append(wcss)
+        silhouette_avg = silhouette_score(data_mtx, labels)
+        silhouette_ls.append(silhouette_avg)
 
-    # Plot the within-cluster variance for each k to find the elbow
-    plt.figure(figsize=(10, 5))
-    plt.plot(k_values, wcss_ls / np.max(wcss_ls), marker='o')
-    plt.title('Elbow method for optimal k')
-    plt.xlabel('Number of clusters (k)')
-    plt.ylabel('normalized within-cluster Variance (WCSS)')
+    # Plot the within-cluster variance and silhouette score
+    fig, ax1 = plt.subplots(figsize=(10, 5))
+
+    # Plot WCSS on the left y-axis
+    ax1.plot(k_values, np.array(wcss_ls) / np.max(wcss_ls), marker='o', label='WCSS (normalized)')
+    ax1.set_xlabel('Number of clusters (k)')
+    ax1.set_ylabel('Normalized within-cluster Variance (WCSS)', color='blue')
+    ax1.tick_params(axis='y', labelcolor='blue')
+    ax1.grid(visible=True)
+
+    # Create a secondary y-axis to plot the silhouette score
+    ax2 = ax1.twinx()
+    ax2.plot(k_values, silhouette_ls, marker='o', color='red', label='Silhouette Score')
+    ax2.set_ylabel('Silhouette Score', color='red')
+    ax2.tick_params(axis='y', labelcolor='red')
+
+    # Title and show plot
+    plt.title('Elbow method and Silhouette Score for optimal k')
+    fig.tight_layout()  # Adjust layout to prevent overlap
     plt.xticks(k_values)
-    plt.grid(visible=True)
-    #plt.savefig("Data Clustering/elbow_curve.jpg", dpi=300)
     plt.show()
 
 

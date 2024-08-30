@@ -1,6 +1,10 @@
-import os
+import time
+wait_minutes = 380
+for i in range(wait_minutes):
+    print(f"{wait_minutes - i} minutes until the script starts.........", end="\r")
+    #time.sleep(60)
 
-from config import BASE_DIR
+import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
@@ -9,6 +13,7 @@ from sklearn.decomposition import PCA
 
 from feature_selection import feature_selection_vif, feature_selection_corr_test
 
+from config import BASE_DIR
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -101,7 +106,7 @@ yield_df = pd.merge(yield_df, cluster_df, how="left") # , on=["country", "adm1",
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
 yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
 yield_df.loc[yield_df["country"] == "Tanzania", "adm1_"] = "Tanzania"
-cluster_set = "adm"
+cluster_set = "diff_preci-6_cluster" # 'ndvi-7_cluster', 'diff_ndvi-3_cluster', 'preci-7_cluster', 'diff_preci-6_cluster'
 assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
 
 # define objective (target)
@@ -111,23 +116,23 @@ objective = "yield_anomaly"
 alpha = None
 
 # vif threshold
-vif_threshold = 5
+vif_threshold = None
 
 # choose model or set of models that are used
-model_type = "lasso"
+model_type = "xgb"
 # choose max feature len for feature shrinking
 #max_feature_len = 1
 # choose timeout
-timeout = 30
+timeout = 300
 # choose duration (sec) of optimization using optuna
-n_trials = 100
+n_trials = 250
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # folds of optuna hyperparameter search
 num_folds = 5
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0828_{objective}_{cluster_set}_{model_type}_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"0829_{objective}_{cluster_set}_{model_type}_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 if alpha:
     run_name += f"_corrtest{alpha}"
 if vif_threshold:
@@ -232,7 +237,9 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
 
         # make feature-, model- and hyperparameter-selection using optuna
         sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True, warn_independent_sampling=False)
-        opti = OptunaOptimizer(X=X_train, y=y_train, years=years_train, predictor_names=sel_feature_names_,
+        opti = OptunaOptimizer(study_name=f"{cluster_name}_{year_out}",
+                               X=X_train, y=y_train, years=years_train,
+                               predictor_names=sel_feature_names_,
                                sampler=sampler,
                                model_types=run.model_types,
                                feature_set_selection=False, feature_len_shrinking=False,
@@ -240,6 +247,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
 
         mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
                                          show_progress_bar=True, print_result=False)
+        run.save_optuna_study(study=opti.study)
 
 
         # train best model
