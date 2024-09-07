@@ -24,11 +24,14 @@ def load_rs_data(rs_path, filter_filename=None):
         with rasterio.open(rs_path / file_name) as rs_src:
             rs_image = rs_src.read(1)
             # the following shrinking makes sure the image is in the correct format (660, 520)
-            rs_image = rs_image[8:-9]
+            #rs_image = rs_image[8:-9]
             #plt.imshow(rs_image)
             #plt.show()
             date_list.append(file_name[18:28])
             rs_image_list.append(rs_image)
+            transform = rs_src.transform
+
+            crs = rs_src.crs
 
     return rs_image_list, date_list
 

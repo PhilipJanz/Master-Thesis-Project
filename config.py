@@ -21,3 +21,6 @@ COUNTRY_COLORS = {#"Ethiopia": ETHIOPIA_COLOR,
                   "Tanzania": TANZANIA_COLOR,
                   "Zambia": ZAMBIA_COLOR,
                   "Malawi": MALAWI_COLOR}
+
+# (area of interest) coordinates for a rectangular area: (min Lon, min Lat, max Lon, max Lat)
+AOI = [22, -18, 40.5, -1]
