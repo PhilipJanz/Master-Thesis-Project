@@ -5,7 +5,7 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 from sklearn.decomposition import PCA
 
-from config import SEED, BASE_DIR
+from config import SEED, BASE_DIR, PROCESSED_DATA_DIR
 
 import numpy as np
 import pandas as pd
@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import Model
 
-from data_loader import load_yield_data, load_my_cc, load_cluster_data, load_soil_data
+from data_loader import load_yield_data, load_my_cc, load_cluster_data, load_soil_data, load_processed_features, \
+    load_soil_pca_data
 from optuna_modeling.feature_sets_for_optuna import feature_location_dict
 from data_assembly import process_list_of_feature_df, make_adm_column, make_X, make_dummies
 from run import list_of_runs, Run, open_run
@@ -44,51 +45,26 @@ There are two main loops:
         the picked hyperparameters and feature set are saved  for later investigation
 """
 
-# LOAD & PREPROCESS ####################################################################################################
-
-# load yield data and benchmark
-yield_df = load_yield_data()
-yield_df = yield_df[(yield_df.harv_year > 2001) & (yield_df.harv_year < 2023)].reset_index(drop=True)
-yield_df = make_adm_column(yield_df)
-
-# load crop calendar (CC)
-cc_df = load_my_cc()
-
-# load and process features
-length = 10
-processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df,
-                                                       feature_dict=feature_location_dict,
-                                                       length=length,
-                                                       start_before_sos=30, end_before_eos=60)
-
-
-# load soil characteristics
-soil_df = load_soil_data()
-soil_df = make_adm_column(soil_df)
-pca = PCA(n_components=2)
-soil_df[["soil_1", "soil_2"]] = pca.fit_transform(soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']])
-print("explained_variance_ratio_ of PCA on soil:", pca.explained_variance_ratio_)
-soil_df = pd.merge(yield_df["adm"], soil_df, on=["adm"], how="left")
-soil_df = soil_df[["soil_1", "soil_2"]] # soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']]
-# scale each column (soil property) individually
-soil_df.iloc[:, :] = StandardScaler().fit_transform(soil_df.values)
-
-# load clusters
-cluster_df = load_cluster_data()
-yield_df = pd.merge(yield_df, cluster_df, how="left")  # , on=["country", "adm1", "adm2"]
-
 # INITIALIZATION #######################################################################################################
 
-# choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
-yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
-data_split = "all"
-#assert data_split in yield_df.columns, f"The chosen cluster-set '{data_split}' is not occuring in the yield_df."
+# date of first execution of that run
+date = "0901"
 
 # define objective (target)
-objective = "yield_anomaly"
+objective = "yield"
 
+# choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
+data_split = "all"
+
+# length of timeseries of remotes sensing and meteorological features
+ts_length = 10
+
+# number of principal components that are used to make soil-features (using PCA)
+soil_pc_number = 2
+
+# optuna hyperparameter optimization params
 # choose timeout
-timeout = 60 * 60 * 3
+timeout = 60 * 60 * 1
 # choose duration (sec) of optimization using optuna
 n_trials = 250
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
@@ -96,8 +72,24 @@ n_startup_trials = 100
 # folds of optuna hyperparameter search
 num_folds = 5
 
+
+# LOAD & PREPROCESS ####################################################################################################
+
+# load yield data and benchmark
+yield_df = load_yield_data()
+
+# load and process features
+processed_feature_df_dict = load_processed_features(ts_length)
+
+# load soil characteristics
+soil_df = load_soil_pca_data(pc_number=2)
+
+# load clusters
+cluster_df = load_cluster_data()
+yield_df = pd.merge(yield_df, cluster_df, how="left")  # , on=["country", "adm1", "adm2"]
+
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0829_{objective}_{data_split}_transferable-lstm_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"{date}_{objective}_{data_split}_transferable-lstm_{ts_length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -133,7 +125,7 @@ years = yield_df.harv_year.values
 # prepare predictors # [cluster_yield_df.harv_year] +
 predictors_list = [yield_df.harv_year]
 # add dummies for regions
-predictors_list.append(soil_df.loc[yield_df.index])
+predictors_list.append(soil_df)
 predictors_list.append(make_dummies(yield_df))
 # form the static regressor-matrix X_static
 X_static, static_feature_names = make_X(df_ls=predictors_list, standardize=True)
@@ -194,7 +186,10 @@ for _ in [0]:
         # split the data
         X_train, y_train, years_train = (X_static_source[~year_out_bool], X_time_source[~year_out_bool]), y_source[~year_out_bool], years_source[~year_out_bool]
         X_test, y_test = (X_static_source[year_out_bool], X_time_source[year_out_bool]), y_source[year_out_bool]
-        print(source_name, year_out, f"\nmse(train)={round(np.mean(y_train ** 2), 3)}")
+        if objective == "yield_anomaly":
+            print(source_name, year_out, f"\nmse(train)={round(np.mean(y_train ** 2), 3)}")
+        else:
+            print(source_name, year_out, f"\nmse(train)={round(np.mean((y_train - np.mean(y_train)) ** 2), 3)}")
 
         # train best model
         trained_model = opti.train_best_model(X=X_train, y=y_train)

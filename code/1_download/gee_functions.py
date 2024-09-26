@@ -34,15 +34,16 @@ def apply_crop_mask(image, geometry):
     return image.updateMask(crop_mask)
 
 
-def download_image_collection(image_collection, geometry, band, folder):
+def download_image_collection(image_collection, geometry, band, folder, scale, modis_quality_filter=False):
     # Reduce the collection to a list of image IDs (note: do this only if the list is small!)
     image_ids = image_collection.aggregate_array('system:id').getInfo()
 
     # Now iterate over image IDs client-side
     for image_id in image_ids:
         image = ee.Image(image_id)
-        # Apply the quality filter to the individual image
-        image = apply_quality_filter(image)
+        if modis_quality_filter:
+            # Apply the quality filter to the individual image
+            image = apply_quality_filter(image)
         # Apply the crop mask to the image
         #image = apply_crop_mask(image, geometry)
         # Perform operations with the image
@@ -53,19 +54,19 @@ def download_image_collection(image_collection, geometry, band, folder):
             fileNamePrefix=image_id + "_" + band,
             crs='EPSG:4326',
             #crsTransform=[0.05, 0, 22, 0, -0.05, 15],
-            scale=250,
+            scale=scale,
             fileFormat='GeoTIFF'
         )
         task.start()
-        time.sleep(1)
+        time.sleep(5)
         while task.status()['state'] == 'RUNNING':
             print('Running...')
             # Perhaps task.cancel() at some point.
-            time.sleep(5)
+            time.sleep(1)
         print('Done.', task.status())
 
 
-def download_worldcereal_cc(geometry, folder):
+def download_worldcereal_cm(geometry, folder):
     # Load the WorldCereal crop mask for maize and select the 'classification' band
     crop_mask = ee.ImageCollection("ESA/WorldCereal/2021/MODELS/v100") \
         .filter(ee.Filter.eq('product', 'maize')) \
@@ -77,7 +78,7 @@ def download_worldcereal_cc(geometry, folder):
     task = ee.batch.Export.image.toDrive(
         image=crop_mask,
         folder=folder,
-        fileNamePrefix="worldcereal_crop_calendar",
+        fileNamePrefix="worldcereal_crop_mask",
         crs='EPSG:4326',
         scale=250,
         #crsTransform=[0.05, 0, 22, 0, -0.05, 15],

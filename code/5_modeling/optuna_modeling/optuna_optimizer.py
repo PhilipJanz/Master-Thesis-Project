@@ -202,8 +202,8 @@ def init_model(X, model_name, trial=None, params=None):
         _, t, f = X_time.shape
         if trial:
             params = {
-                "epochs": trial.suggest_categorical('epochs', [100, 200, 500, 1000]),
-                "batch_size": trial.suggest_categorical('batch_size', [50, 100, 200, 400, 800])
+                "epochs": trial.suggest_int('epochs', 100, 2000),
+                "batch_size": trial.suggest_int('batch_size', 50, 800)
             }
             return create_lstm(t=t, f=f, s=s, trial=trial), params
         else:
@@ -299,6 +299,8 @@ class OptunaOptimizer:
 
         # Generate params for model
         model, params = init_model(X=X_trans, model_name=model_name, trial=trial)
+        if model_name in ["nn", "lstm"]:
+            init_weights = model.get_weights()
 
         # shrink number of folds if wanted else make loyoCV
         if self.num_folds < len(np.unique(self.years)):
@@ -322,8 +324,8 @@ class OptunaOptimizer:
 
                 # Fit the model and differentiate between the model classes
                 if model_name in ["nn", "lstm"]:
-                    model_copy = clone_model(model)
-                    model_copy.set_weights(model.get_weights())
+                    model_copy = model
+                    model_copy.set_weights(init_weights)
                     model_copy.compile(optimizer="adam", loss=model.loss)
                     # Train the Keras model
                     model_copy.fit(X_train, y_train,
@@ -346,7 +348,7 @@ class OptunaOptimizer:
                 # Calculate the RMSE and append it to the list
                 fold_mse = mean_squared_error(y_val, preds)
                 mse_ls.append(fold_mse)
-                del model_copy
+                #del model_copy
         #if model_name in ["nn", "lstm"]:
             # clear session
             #tf.keras.backend.clear_session()

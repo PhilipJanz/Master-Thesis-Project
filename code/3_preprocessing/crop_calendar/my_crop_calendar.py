@@ -28,6 +28,7 @@ asap_cc_df.iloc[:, 4:] = (asap_cc_df.iloc[:, 4:] - 1) * 10 + 1
 
 adm_map["sos"], adm_map["eos"] = make_cc(asap_cc_df=asap_cc_df,
                                          ndvi_df=ndvi_df, preci_df=preci_df,
+                                         threshold=.25,
                                          plot=False)
 
 adm_map["season_length"] = adm_map["eos"] - adm_map["sos"]

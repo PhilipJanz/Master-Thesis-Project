@@ -20,7 +20,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '0830_yield_anomaly_adm_transfer_features_from_all_lasso_300_100_20_10'
+run_name = '0901_yield_adm_xgb_3_300_250_100_5'
 #run = open_run(run_name=run_name)
 #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
 #for i, (name, model) in enumerate(model_dir.items()):
@@ -51,11 +51,12 @@ for adm, adm_results_df in result_df.groupby("adm"):
     performance_dict["mse"].append(mse)
     performance_dict["nse"].append(nse)
     """
-    fig, ax = plt.subplots()
-    ax.plot(adm_results_df["harv_year"], y_true)
-    ax.plot(adm_results_df["harv_year"], adm_results_df["y_pred"])
-    plt.title(f"{adm} {nse}")
-    plt.show()
+    if "Malawi" in adm:
+        fig, ax = plt.subplots()
+        ax.plot(adm_results_df["harv_year"], y_true)
+        ax.plot(adm_results_df["harv_year"], adm_results_df["y_pred"])
+        plt.title(f"{adm} {nse}")
+        plt.show()
     """
 performance_df = pd.DataFrame(performance_dict)
 

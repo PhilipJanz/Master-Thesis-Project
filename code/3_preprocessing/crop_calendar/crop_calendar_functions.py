@@ -29,7 +29,7 @@ def detect_one_season(ndvi_profile):
 
 
 
-def detect_seasons(ndvi_profile):
+def detect_seasons(ndvi_profile, threshold=.25):
     # Detect local maxima
     maxima_indices, _ = find_peaks(ndvi_profile)
     # Detect local minima by inverting the NDVI data
@@ -44,8 +44,8 @@ def detect_seasons(ndvi_profile):
         amplitude = max_ndvi - min_ndvi
 
         # Define thresholds for the start and end of the season
-        start_threshold = min_ndvi + 0.25 * amplitude
-        end_threshold = max_ndvi - 0.75 * amplitude
+        start_threshold = min_ndvi + threshold * amplitude
+        end_threshold = max_ndvi - (1 - threshold) * amplitude
 
         # find sos & eos
         sos = find_sos(ndvi_profile, start_threshold)
@@ -236,7 +236,7 @@ def get_day_of_year(date_str):
     return day_of_year
 
 
-def make_cc(asap_cc_df, ndvi_df, preci_df, plot):
+def make_cc(asap_cc_df, ndvi_df, preci_df, threshold=.25, plot):
     # detect value columns in dataframes and save day of year for fitting later
     ndvi_value_columns = [column for column in ndvi_df.columns if column[:4].isdigit()]
     ndvi_day_of_year = [get_day_of_year(date) for date in ndvi_value_columns]
@@ -262,7 +262,7 @@ def make_cc(asap_cc_df, ndvi_df, preci_df, plot):
         preci_values = preci_df[preci_value_columns].values[i].astype(dtype="float")
 
         # estimate sos, eos
-        sos, eos = detect_seasons(ndvi_profile)
+        sos, eos = detect_seasons(ndvi_profile, threshold=threshold)
         sos_ls.append(sos)
         eos_ls.append(eos)
 

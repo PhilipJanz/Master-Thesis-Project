@@ -1,18 +1,22 @@
+import time
+
+wait_minutes = 120
+for i in range(wait_minutes):
+    print(f"{wait_minutes - i} minutes until the script starts.........", end="\r")
+    time.sleep(60)
+
 import os
 
-from config import SEED
+from config import SEED, BASE_DIR
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 #os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-from sklearn.decomposition import PCA
-
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 
-from data_loader import load_cluster_data, load_soil_data
-from data_assembly import make_adm_column, make_X, make_dummies
+from data_loader import load_cluster_data, load_soil_pca_data, load_yield_data
+from data_assembly import make_X, make_dummies
 from run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer import OptunaOptimizer
 import optuna
@@ -36,58 +40,53 @@ There are two main loops:
         the picked hyperparameters and feature set are saved  for later investigation
 """
 
-# LOAD & PREPROCESS ####################################################################################################
+
+# INITIALIZATION #######################################################################################################
+
+# date of first execution of that run
+date = "0831"
+
+# define objective (target)
+objective = "yield"
+
+# choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
+data_split = "adm"
 
 # source model
-source_run_name = "0829_yield_anomaly_all_transferable-lstm_10_10800_250_100_5"
+source_run_name = "0831_yield_all_transferable-lstm_10_10800_250_100_5"
 source_name = "all"
 
-# Sleep for 5 hours (5 hours * 60 minutes/hour * 60 seconds/minute)
-#time.sleep(5 * 60 * 60)
+# predictive model
+model_type = "xgb"
 
-source_run = open_run(source_run_name)
-yield_df = source_run.load_prediction()
+# optuna hyperparameter optimization params
+# choose timeout
+timeout = 100
+# choose duration (sec) of optimization using optuna
+n_trials = 250
+# choose number of optuna startup trails (random parameter search before sampler gets activated)
+n_startup_trials = 100
+# folds of optuna hyperparameter search
+num_folds = 5
+
+
+# LOAD & PREPROCESS ####################################################################################################
+
+# load yield data and benchmark
+yield_df = load_yield_data()
 
 # load soil characteristics
-soil_df = load_soil_data()
-soil_df = make_adm_column(soil_df)
-pca = PCA(n_components=2)
-soil_df[["soil_1", "soil_2"]] = pca.fit_transform(soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']])
-print("explained_variance_ratio_ of PCA on soil:", pca.explained_variance_ratio_)
-soil_df = pd.merge(yield_df["adm"], soil_df, on=["adm"], how="left")
-soil_df = soil_df[["soil_1", "soil_2"]] # soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']]
-# scale each column (soil property) individually
-soil_df.iloc[:, :] = StandardScaler().fit_transform(soil_df.values)
+soil_df = load_soil_pca_data(pc_number=2)
 
 # load clusters
 cluster_df = load_cluster_data()
 yield_df = pd.merge(yield_df, cluster_df, how="left")  # , on=["country", "adm1", "adm2"]
 
-
-# INITIALIZATION #######################################################################################################
-
-# choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
-yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
-yield_df.loc[yield_df["country"] == "Tanzania", "adm1_"] = "Tanzania"
-cluster_set = "adm"
-assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
-
-# define objective (target)
-objective = "yield_anomaly"
-
-# choose model or set of models that are used
-model_type = "lasso"
-# choose timeout
-timeout = 300
-# choose duration (sec) of optimization using optuna
-n_trials = 100
-# choose number of optuna startup trails (random parameter search before sampler gets activated)
-n_startup_trials = 20
-# folds of optuna hyperparameter search
-num_folds = 10
+# load source run
+source_run = open_run(source_run_name)
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = (f"0830_{objective}_{cluster_set}_transfer_features_from_{source_name}_{model_type}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}")
+run_name = (f"{date}_{objective}_{data_split}_transfer_features_from_{source_name}_{model_type}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}")
 
 # load or create that run
 if run_name in list_of_runs():
@@ -100,12 +99,12 @@ if run_name in list_of_runs():
     yield_df["n_opt_trials"] = pd.to_numeric(yield_df["n_opt_trials"])
 else:
     run = Run(name=run_name,
-              cluster_set=cluster_set,
+              cluster_set=data_split,
               model_types=model_type,
               timeout=timeout,
               n_trials=n_trials,
               n_startup_trials=n_startup_trials,
-              python_file=os.path.abspath(__file__))
+              python_file=BASE_DIR / "code/5_modeling/optuna_modeling/prediction_using_transfer_model.py") #os.path.abspath(__file__))
 
     # columns to be filled with predictions
     yield_df["train_mse"] = np.nan
@@ -116,7 +115,7 @@ else:
 
 # INFERENCE ############################################################################################################
 
-for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
+for cluster_name, cluster_yield_df in yield_df.groupby(data_split):
     #break
     #if "Tanzania" in cluster_yield_df["country"].values:
     #    continue
@@ -188,22 +187,23 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
         # train best model
         trained_model = opti.train_best_model(X=X_train, y=y_train)
 
-        if model_type == "xgb":
-            if np.all(trained_model.feature_importances_[indicator_loc] < 1e-3):
-                # in this case just output 0 as the best estimator for yield anomaly in that scenario
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.mean(y_train ** 2)
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
-                continue
-        if model_type == "lasso":
-            if np.all(trained_model.coef_[indicator_loc] == 0):
-                # in this case just output 0 as the best estimator for yield anomaly in that scenario
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.mean(y_train ** 2)
-                yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
-                continue
+        if objective == "yield_anomaly":
+            if model_type == "xgb":
+                if np.all(trained_model.feature_importances_[indicator_loc] < 1e-3):
+                    # in this case just output 0 as the best estimator for yield anomaly in that scenario
+                    yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
+                    yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
+                    yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.mean(y_train ** 2)
+                    yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
+                    continue
+            if model_type == "lasso":
+                if np.all(trained_model.coef_[indicator_loc] == 0):
+                    # in this case just output 0 as the best estimator for yield anomaly in that scenario
+                    yield_df.loc[cluster_yield_df.index[year_out_bool], "y_pred"] = 0.0
+                    yield_df.loc[cluster_yield_df.index[year_out_bool], "best_model"] = "zero-predictor"
+                    yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.mean(y_train ** 2)
+                    yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
+                    continue
 
         # predict train- & test-data
         y_pred_train = trained_model.predict(X_train)
@@ -263,7 +263,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
 
     # save predictions and performance
     run.save_predictions(prediction_df=yield_df)
-    run.save_performance(prediction_df=yield_df[~(yield_df["y_pred"].isna())], cluster_set=cluster_set)
+    run.save_performance(prediction_df=yield_df[~(yield_df["y_pred"].isna())], cluster_set=data_split)
 
     # save run
     run.save()

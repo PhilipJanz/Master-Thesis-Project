@@ -312,10 +312,10 @@ def my_merge(df1, df2, on, rel_tol=0.01):
     return merged_df
 
 def clean_pipeline(yield_df,
-                   group_columns = ["country", "adm1", "adm2", "season"],
-                   min_area = 1000,
-                   max_yield = 10,
-                   min_datapoints = 7,
+                   group_columns=["country", "adm1", "adm2", "season"],
+                   min_area=1000,
+                   max_yield=10,
+                   min_datapoints=7,
                    plot=False
                    ):
     """
@@ -402,7 +402,7 @@ def clean_pipeline(yield_df,
 def clean_pipeline_yield(yield_df,
                          group_columns=["country", "adm1", "adm2", "season"],
                          max_yield=10,
-                         min_datapoints = 7,
+                         min_datapoints=7,
                          plot=False
                          ):
     """

@@ -43,8 +43,6 @@ There are two main loops:
 
 # load yield data and benchmark
 yield_df = load_yield_data()
-yield_df = yield_df[(yield_df.harv_year > 2001) & (yield_df.harv_year < 2023)].reset_index(drop=True)
-yield_df = make_adm_column(yield_df)
 
 # load crop calendar (CC)
 cc_df = load_my_cc()

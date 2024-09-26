@@ -24,3 +24,7 @@ COUNTRY_COLORS = {#"Ethiopia": ETHIOPIA_COLOR,
 
 # (area of interest) coordinates for a rectangular area: (min Lon, min Lat, max Lon, max Lat)
 AOI = [22, -18, 40.5, -1]
+
+# time range of interest (dependend on available yield data)
+START_DATE = '2000-01-01'
+END_DATE = '2023-12-31'

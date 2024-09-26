@@ -18,7 +18,8 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-from data_loader import load_yield_data, load_my_cc, load_cluster_data, load_soil_data
+from data_loader import load_yield_data, load_my_cc, load_cluster_data, load_soil_data, load_processed_features, \
+    load_soil_pca_data
 from optuna_modeling.feature_sets_for_optuna import feature_location_dict
 from data_assembly import process_list_of_feature_df, make_adm_column, make_X, make_dummies
 from run import list_of_runs, Run, open_run
@@ -46,71 +47,16 @@ There are two main loops:
         the picked hyperparameters and feature set are saved  for later investigation
 """
 
-# LOAD & PREPROCESS ####################################################################################################
-
-# load yield data and benchmark
-yield_df = load_yield_data()
-yield_df = yield_df[(yield_df.harv_year > 2001) & (yield_df.harv_year < 2023)].reset_index(drop=True)
-yield_df = make_adm_column(yield_df)
-# data unit test
-assert len(yield_df) == 1775
-
-# load crop calendar (CC)
-cc_df = load_my_cc()
-
-# load and process features
-length = 3
-processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df,
-                                                       feature_dict=feature_location_dict,
-                                                       length=length,
-                                                       start_before_sos=30, end_before_eos=60)
-"""
-corr_mtx = []
-adm_ls = []
-for cluster_name, cluster_yield_df in yield_df.groupby("adm"):
-    corr_ls = []
-    feature_ls = []
-    for feature, processed_feature_df in processed_feature_df_dict.items():
-        for feature_num in processed_feature_df.columns:
-            feature_values = processed_feature_df.loc[cluster_yield_df.index, feature_num].values
-            #corr = np.corrcoef(np.vstack([feature_values, cluster_yield_df["yield_anomaly"].values]))[0, 1]
-            corr, p_value = kendalltau(feature_values, cluster_yield_df["yield_anomaly"].values)
-            if p_value > .1:
-                corr = np.nan
-            corr_ls.append(corr)
-            feature_ls.append(feature_num)
-    corr_mtx.append(corr_ls)
-    adm_ls.append(cluster_name)
-corr_df = pd.DataFrame(corr_mtx, columns=feature_ls, index=adm_ls)
-# filter out unplausible data
-#unplausible_adm = corr_df[(corr_df.ndvi_1 < 0) & (corr_df["preci-cdd_1"] > 0)].index
-"""
-
-# load soil characteristics
-soil_df = load_soil_data()
-soil_df = make_adm_column(soil_df)
-pca = PCA(n_components=2)
-soil_df[["soil_1", "soil_2"]] = pca.fit_transform(soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']])
-print("explained_variance_ratio_ of PCA on soil:", pca.explained_variance_ratio_)
-soil_df = pd.merge(yield_df["adm"], soil_df, on=["adm"], how="left")
-soil_df = soil_df[["soil_1", "soil_2"]] # soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']]
-# scale each column (soil property) individually
-soil_df.iloc[:, :] = StandardScaler().fit_transform(soil_df.values)
-
-# load clusters
-cluster_df = load_cluster_data()
-yield_df = pd.merge(yield_df, cluster_df, how="left") # , on=["country", "adm1", "adm2"]
-
 # INITIALIZATION #######################################################################################################
 
-# choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
-yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
-yield_df.loc[yield_df["country"] == "Tanzania", "adm1_"] = "Tanzania"
-cluster_set = "diff_preci-6_cluster" # 'ndvi-7_cluster', 'diff_ndvi-3_cluster', 'preci-7_cluster', 'diff_preci-6_cluster'
-assert cluster_set in yield_df.columns, f"The chosen cluster-set '{cluster_set}' is not occuring in the yield_df."
+# date of first execution of that run
+date = "0901"
 
 # define objective (target)
-objective = "yield_anomaly"
+objective = "yield"
+
+# choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
+data_split = "adm"
 
 # corr test alpha for selecting important features
 alpha = None
@@ -120,24 +66,46 @@ vif_threshold = None
 
 # choose model or set of models that are used
 model_type = "xgb"
-# choose max feature len for feature shrinking
-#max_feature_len = 1
+
+# length of timeseries of remotes sensing and meteorological features
+ts_length = 3
+
+# number of principal components that are used to make soil-features (using PCA)
+soil_pc_number = 2
+
+# optuna hyperparameter optimization params
 # choose timeout
 timeout = 300
 # choose duration (sec) of optimization using optuna
 n_trials = 250
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
-n_startup_trials = 50
+n_startup_trials = 100
 # folds of optuna hyperparameter search
 num_folds = 5
 
+
+# LOAD & PREPROCESS ####################################################################################################
+
+# load yield data and benchmark
+yield_df = load_yield_data()
+
+# load and process features
+processed_feature_df_dict = load_processed_features(ts_length)
+
+# load soil characteristics
+soil_df = load_soil_pca_data(pc_number=2)
+
+# load clusters
+cluster_df = load_cluster_data()
+yield_df = pd.merge(yield_df, cluster_df, how="left")  # , on=["country", "adm1", "adm2"]
+
+
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0829_{objective}_{cluster_set}_{model_type}_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"{date}_{objective}_{data_split}_{model_type}_{ts_length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 if alpha:
     run_name += f"_corrtest{alpha}"
 if vif_threshold:
     run_name += f"_vif{vif_threshold}"
-
 
 # load or create that run
 if run_name in list_of_runs():
@@ -150,7 +118,7 @@ if run_name in list_of_runs():
     yield_df["n_opt_trials"] = pd.to_numeric(yield_df["n_opt_trials"])
 else:
     run = Run(name=run_name,
-              cluster_set=cluster_set,
+              cluster_set=data_split,
               model_types=model_type,
               timeout=timeout,
               n_trials=n_trials,
@@ -160,13 +128,13 @@ else:
     # columns to be filled with predictions
     yield_df["train_mse"] = np.nan
     yield_df["y_pred"] = np.nan
-    yield_df["best_model"] = np.nan
     yield_df["n_opt_trials"] = np.nan
     run.save_predictions(prediction_df=yield_df)
 
+
 # INFERENCE ############################################################################################################
 
-for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
+for cluster_name, cluster_yield_df in yield_df.groupby(data_split):
     #break
     #if "Tanzania" in cluster_yield_df["country"].values:
     #    continue
@@ -252,7 +220,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
 
         # train best model
         trained_model = opti.train_best_model(X=X_train, y=y_train)
-
+        """
         if model_type == "xgb":
             if np.all(trained_model.feature_importances_[indicator_loc] < 1e-3):
                 # in this case just output 0 as the best estimator for yield anomaly in that scenario
@@ -269,7 +237,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
                 yield_df.loc[cluster_yield_df.index[year_out_bool], "train_mse"] = np.var(y_train)
                 yield_df.loc[cluster_yield_df.index[year_out_bool], "n_opt_trials"] = len(opti.study.trials)
                 continue
-
+        """
         # predict train- & test-data
         y_pred_train = trained_model.predict(X_train)
         y_pred_test = trained_model.predict(X_test)
@@ -320,7 +288,7 @@ for cluster_name, cluster_yield_df in yield_df.groupby(cluster_set):
 
     # save predictions and performance
     run.save_predictions(prediction_df=yield_df)
-    run.save_performance(prediction_df=yield_df[~(yield_df["y_pred"].isna())], cluster_set=cluster_set)
+    run.save_performance(prediction_df=yield_df[~(yield_df["y_pred"].isna())], cluster_set=data_split)
 
     # save run
     run.save()
