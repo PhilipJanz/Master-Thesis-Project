@@ -58,7 +58,7 @@ with open(PROCESSED_DATA_DIR / f"features/processed_feature_df_dict_{ts_length}.
 soil_df = load_soil_data()
 soil_df = make_adm_column(soil_df)
 pca = PCA(n_components=soil_pc_number)
-soil_df[["soil_1", "soil_2"]] = pca.fit_transform(soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']])
+soil_df[["soil_1", "soil_2"]] = pca.fit_transform(soil_df[['clay', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']])
 print("explained_variance_ratio_ of PCA on soil:", pca.explained_variance_ratio_)
 soil_df = pd.merge(yield_df["adm"], soil_df, on=["adm"], how="left")
 soil_df = soil_df[["soil_1", "soil_2"]] # soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']]

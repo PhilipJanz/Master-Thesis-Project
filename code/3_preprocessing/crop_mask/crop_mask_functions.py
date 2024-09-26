@@ -6,6 +6,50 @@ from rasterio.enums import Resampling
 from config import *
 
 
+def load_worldcereal_crop_mask(lon_min=None, lat_max=None, lon_max=None, lat_min=None, binary=True):
+    """
+    Loads the WorldCereal crop mask and optionally crops it based on provided longitude and latitude boundaries.
+
+    The function reads the "worldcereal_crop_mask.tif" raster file from the predefined source directory.
+    It retrieves the crop mask layer and metadata such as the coordinate reference system (CRS),
+    transform parameters, and the image dimensions. If longitude and latitude boundaries are provided,
+    the crop mask is cropped accordingly.
+
+    Args:
+        lon_min (float, optional): Minimum longitude of the bounding box. Defaults to None.
+        lat_max (float, optional): Maximum latitude of the bounding box. Defaults to None.
+        lon_max (float, optional): Maximum longitude of the bounding box. Defaults to None.
+        lat_min (float, optional): Minimum latitude of the bounding box. Defaults to None.
+        binary (bool, optional): perform classification into 1 (crop) and 0 (no crop) based on 50% threshold
+
+    Returns:
+        tuple:
+            - crop_mask (numpy.ndarray): 2D array containing the crop mask data, potentially cropped.
+            - transform (affine.Affine): Affine transform object representing the pixel-to-world transformation.
+            - crs (CRS): Coordinate reference system object of the crop mask.
+    """
+    crop_mask_path = SOURCE_DATA_DIR / "crop mask/worldcereal_crop_mask.tif"
+
+    # Load the crop mask to determine the target resolution and transform
+    with rasterio.open(crop_mask_path) as crop_mask_src:
+        if lon_min is not None and lat_max is not None and lon_max is not None and lat_min is not None:
+            # Compute the window of the raster to be read based on the geographical bounds
+            window = crop_mask_src.window(lon_min, lat_min, lon_max, lat_max)
+            crop_mask = crop_mask_src.read(1, window=window)
+            transform = crop_mask_src.window_transform(window)
+        else:
+            crop_mask = crop_mask_src.read(1)
+            transform = crop_mask_src.transform
+
+        crs = crop_mask_src.crs
+
+    # make binary map based on 50% threshold
+    if binary:
+        crop_mask = crop_mask > 50
+
+    return crop_mask, transform, crs
+
+
 def weighted_avg_over_crop_mask(crop_mask, data_image, instance_name, region_name, warn_spread_above=False):
     # again filter crop mask for nan values in the cc data to respect them in the weighted average
     upd_crop_mask = np.where(np.isnan(data_image), np.nan, crop_mask)

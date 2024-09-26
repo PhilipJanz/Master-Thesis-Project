@@ -9,7 +9,7 @@ from remote_sensing.rs_functions import load_rs_data, custom_rolling_average
 
 """
 This script prepares the remote sensing data from MODIS vegetation indices (VI)
-We are process the NDVI and EVI for each region of interest and apply the GEOGLAM crop mask
+We are process the NDVI for each region of interest and apply the WorldCereal crop mask
 Since there are some NaN values and outliers in the data (due to the occcurence of distorted data) 
 we also appie an interpolation and smoother to generate smooth data without missing values.
 """

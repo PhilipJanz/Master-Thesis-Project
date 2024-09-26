@@ -1,9 +1,11 @@
+import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
 from config import PROCESSED_DATA_DIR, RESULTS_DATA_DIR
 from data_assembly import make_adm_column
 from maps.map_functions import load_aoi_map, load_africa_map
+import seaborn as sns
 
 
 def plot_performance_map(performance_data, performance_column, result_filename):
@@ -55,7 +57,7 @@ def plot_map(df, column, title, cmap="viridis", cmap_range=None, save_path=None)
     aoi_map = make_adm_column(aoi_map)
 
     # fusion with performance data
-    geo_performance_data = pd.merge(aoi_map, df, on="adm")
+    geo_performance_data = pd.merge(aoi_map, df, on=list(aoi_map.columns.intersection(df.columns)))
 
     # start plotting
     fig, ax = plt.subplots(figsize=(10, 12))
@@ -65,9 +67,9 @@ def plot_map(df, column, title, cmap="viridis", cmap_range=None, save_path=None)
 
     # Plot NSE
     if cmap_range:
-        geo_performance_data.plot(column=column, cmap=cmap, vmin=cmap_range[0], vmax=cmap_range[1], edgecolor='white', linewidth=0.3, ax=ax, alpha=0.8)
+        geo_performance_data.plot(column=column, cmap=cmap, vmin=cmap_range[0], vmax=cmap_range[1], edgecolor='white', linewidth=0.3, ax=ax, alpha=0.95)
     else:
-        geo_performance_data.plot(column=column, cmap=cmap, edgecolor='white', linewidth=0.3, ax=ax, alpha=0.8)
+        geo_performance_data.plot(column=column, cmap=cmap, edgecolor='white', linewidth=0.3, ax=ax, alpha=0.95)
 
     # Add colorbar
     if cmap_range:
@@ -92,3 +94,22 @@ def plot_map(df, column, title, cmap="viridis", cmap_range=None, save_path=None)
         plt.savefig(save_path, dpi=1200)
 
     plt.show()
+
+
+def plot_corr_matrix(corr_df, title, save_path=None):
+    plt.figure(figsize=(13, 12))  # Set the size of the plot
+    sns.set(style='white')  # Set the style to white
+    # Generate a mask for the upper triangle
+    mask = np.triu(np.ones_like(corr_df, dtype=bool))
+    heatmap = sns.heatmap(corr_df, mask=mask, annot=True, cmap='coolwarm', fmt=".2f",
+                          vmax=1.0, vmin=-1.0)
+    # Add titles and labels
+    plt.title(title, fontsize=16)
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    # Show and save the plot
+    if save_path:
+        plt.savefig(save_path, dpi=600)
+        plt.close()
+    else:
+        plt.show()

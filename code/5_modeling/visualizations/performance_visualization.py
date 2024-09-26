@@ -66,5 +66,3 @@ print(run_name, "avg NSE:", np.round(np.mean(performance_dict["nse"]), 2))
 # plot results as a map
 plot_performance_map(performance_data=performance_df, performance_column="nse", result_filename=run_name)
 
-#plot_map(df=result_df.groupby("adm")["country"].count().reset_index(name="count"), column="count", title="Number of yield datapoint after filtering",
-#         cmap="YlGn", cmap_range=(0, 25), save_path=None)

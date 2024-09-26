@@ -6,11 +6,11 @@ from config import PROCESSED_DATA_DIR
 from data_assembly import make_adm_column
 
 # variables for filtering data
-harv_year_range = (2002, 2022)
+harv_year_range = (2001, 2022)
 
 # variables for unit test (please alter if changes in the yield database occure)
 # set 'None' to deactivate a test
-yield_datapoints_after_filtering = 1775
+yield_datapoints_after_filtering = 1902
 
 
 def load_yield_data():
