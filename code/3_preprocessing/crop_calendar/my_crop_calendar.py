@@ -15,11 +15,10 @@ adm_map = load_aoi_map()
 adm_map['centroid'] = adm_map.representative_point()
 
 # load RS data
-ndvi_df = pd.read_csv(PROCESSED_DATA_DIR / "remote sensing/smooth_ndvi_regional_matrix.csv", keep_default_na=False)
+ndvi_df = pd.read_csv(PROCESSED_DATA_DIR / "remote sensing/cleaned_ndvi_regional_matrix.csv", keep_default_na=False)
 
 # load precipitation data
 preci_df = pd.read_csv(PROCESSED_DATA_DIR / "climate/pr_sum_regional_matrix.csv", keep_default_na=False)
-preci_df = preci_df[~preci_df.country.isin(["Ethiopia", "Kenya"])]
 
 # load ASAP crop calendar (cc) for comparison
 asap_cc_df = pd.read_csv(PROCESSED_DATA_DIR / "crop calendar/processed_crop_calendar.csv", keep_default_na=False)
@@ -28,8 +27,8 @@ asap_cc_df.iloc[:, 4:] = (asap_cc_df.iloc[:, 4:] - 1) * 10 + 1
 
 adm_map["sos"], adm_map["eos"] = make_cc(asap_cc_df=asap_cc_df,
                                          ndvi_df=ndvi_df, preci_df=preci_df,
-                                         threshold=.25,
-                                         plot=False)
+                                         threshold=.3,
+                                         plot=True)
 
 adm_map["season_length"] = adm_map["eos"] - adm_map["sos"]
 adm_map.loc[adm_map.season_length < 0, "season_length"] = adm_map.loc[adm_map.season_length < 0, "season_length"] + 365

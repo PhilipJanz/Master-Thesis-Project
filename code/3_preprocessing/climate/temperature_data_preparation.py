@@ -8,8 +8,7 @@ import geopandas as gpd
 
 from climate.climate_functions import *
 from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR
-from crop_mask.crop_mask_functions import load_geoglam_crop_mask
-
+from crop_mask.crop_mask_functions import load_worldcereal_crop_mask
 
 """
 This script prepares temperature data (ERA5)
@@ -64,15 +63,11 @@ for country_code in country_codes:
             dims = feature_data.dims
             feature_data = feature_data[feature_name]
 
-            # get the geographic boundaries
-            lon_min, lon_max, lat_min, lat_max = calculate_geo_boundaries(dims=dims, transform=target_transform, round=4)
-
-            # load crop mask (cropped on country ).
-            crop_mask, target_transform_, _ = load_geoglam_crop_mask(lon_min=lon_min,
-                                                                     lon_max=lon_max,
-                                                                     lat_min=lat_min,
-                                                                     lat_max=lat_max,
-                                                                     resolution=0.25)
+            # load crop mask (cropped on country).
+            crop_mask, cm_transform, cm_crs = load_worldcereal_crop_mask(target_transform=target_transform,
+                                                                         target_shape=(dims["latitude"],
+                                                                                       dims["longitude"]),
+                                                                         binary=False)
 
             # iterate over regions and generate average feature values for each year
             for ix, row in adm_map[adm_map.country == country].iterrows():
@@ -80,9 +75,8 @@ for country_code in country_codes:
                 region_mask = rasterio.features.rasterize(
                     [row.geometry],
                     out_shape=crop_mask.shape,
-                    transform=target_transform_,
-                    fill=0,  # Areas outside the polygons will be filled with 0
-                    dtype=np.uint8,
+                    transform=target_transform,
+                    fill=np.nan,  # Areas outside the polygons will be filled with 0
                     all_touched=True  # Consider all pixels touched by geometries
                 )
 

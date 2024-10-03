@@ -1,7 +1,9 @@
 import os
 
+import numpy as np
 import pandas as pd
 import rasterio
+from scipy.optimize import curve_fit
 
 
 def load_rs_data(rs_path, filter_filename=None):
@@ -60,3 +62,34 @@ def custom_rolling_average(data, window):
     # Convert the result back to a list
     result = rolling_avg.tolist()
     return result
+
+
+def fill_missing_values(data, periode_length_guess, N):
+    # Define the Fourier series function
+    def sine_approximation(t, *a):
+        ret = a[0] / 2  # a_0 / 2 term
+        periode_length = a[1]
+        n_harmonics = (len(a) - 1) // 2
+        for i in range(n_harmonics):
+            ret += a[2 * i + 2] * np.sin(2 * np.pi * (i + 1) * t / periode_length + a[2 * i + 3])
+        return ret
+
+    # setup data
+    qualitative_data_loc = ~pd.isnull(data)
+    qualitative_data = data[qualitative_data_loc]
+    time_stamps = np.arange(len(data))
+    qualitative_time_stamps = time_stamps[qualitative_data_loc]
+
+    # Initial guess for the coefficients
+    initial_guess = np.zeros(2 * N + 2)
+    initial_guess[0] = np.max(qualitative_data) - np.min(qualitative_data)
+    initial_guess[1] = periode_length_guess
+
+    # Curve fitting
+    params, params_covariance = curve_fit(sine_approximation, qualitative_time_stamps, qualitative_data, p0=initial_guess)
+
+    # Generate fitted values for desired time stamps
+    fitted_values = sine_approximation(time_stamps, *params)
+    filled_data = data.copy()
+    filled_data[~qualitative_data_loc] = fitted_values[~qualitative_data_loc]
+    return time_stamps, filled_data

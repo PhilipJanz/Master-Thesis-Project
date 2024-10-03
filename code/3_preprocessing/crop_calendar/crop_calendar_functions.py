@@ -236,7 +236,7 @@ def get_day_of_year(date_str):
     return day_of_year
 
 
-def make_cc(asap_cc_df, ndvi_df, preci_df, threshold=.25, plot):
+def make_cc(asap_cc_df, ndvi_df, preci_df, threshold=.25, plot=False):
     # detect value columns in dataframes and save day of year for fitting later
     ndvi_value_columns = [column for column in ndvi_df.columns if column[:4].isdigit()]
     ndvi_day_of_year = [get_day_of_year(date) for date in ndvi_value_columns]

@@ -8,7 +8,7 @@ import geopandas as gpd
 
 from climate.climate_functions import *
 from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR
-from crop_mask.crop_mask_functions import load_geoglam_crop_mask
+from crop_mask.crop_mask_functions import load_worldcereal_crop_mask, reproject_raster
 
 """
 This script prepares the precipitation data (CHIRPS) 
@@ -44,7 +44,7 @@ for country_code in country_codes:
 
     # run through the dekades
     for dekade_folder_name in dekade_folder_names:
-        print(dekade_folder_name)
+        print(country_code, dekade_folder_name)
         dekade_country_data_path = country_data_path / dekade_folder_name
         dekade_end = str(dekade_country_data_path)[-5:]
 
@@ -63,11 +63,11 @@ for country_code in country_codes:
             dims = feature_data.dims
             feature_data = feature_data[feature_name]
 
-            # get the geographic boundaries
-            lon_min, lon_max, lat_min, lat_max = calculate_geo_boundaries(dims=dims, transform=target_transform, round=4)
-
-            # load crop mask (cropped on country ).
-            crop_mask, target_transform, _ = load_geoglam_crop_mask(lon_min=lon_min, lon_max=lon_max, lat_min=lat_min, lat_max=lat_max)
+            # load crop mask (cropped on country).
+            crop_mask, cm_transform, cm_crs = load_worldcereal_crop_mask(target_transform=target_transform,
+                                                                         target_shape=(dims["latitude"],
+                                                                                       dims["longitude"]),
+                                                                         binary=False)
 
             # iterate over regions and generate average feature values for each year
             for ix, row in adm_map[adm_map.country == country].iterrows():
@@ -76,8 +76,7 @@ for country_code in country_codes:
                     [row.geometry],
                     out_shape=crop_mask.shape,
                     transform=target_transform,
-                    fill=0,  # Areas outside the polygons will be filled with 0
-                    dtype=np.uint8,
+                    fill=np.nan,  # Areas outside the polygons will be filled with 0
                     all_touched=True  # Consider all pixels touched by geometries
                 )
 
@@ -90,7 +89,7 @@ for country_code in country_codes:
                 weighted_averages = calculate_weighted_average_on_xarray_images(images=feature_data,
                                                                                 mask=normalized_regional_crop_mask)
                 # write into data matix
-                dates = [f"{str(t)[:4]}_{dekade_end}"  for t in weighted_averages.time.values]
+                dates = [f"{str(t)[:4]}_{dekade_end}" for t in weighted_averages.time.values]
                 data_matrix_dict[feature_name].loc[ix, dates] = weighted_averages.values
 
 # save feature matrices

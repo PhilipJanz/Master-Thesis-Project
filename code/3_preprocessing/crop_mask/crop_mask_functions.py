@@ -1,12 +1,12 @@
 import numpy as np
 import rasterio
 import rasterio.features
-from rasterio.enums import Resampling
+from rasterio.warp import reproject, Resampling
 
 from config import *
 
 
-def load_worldcereal_crop_mask(lon_min=None, lat_max=None, lon_max=None, lat_min=None, binary=True):
+def load_worldcereal_crop_mask(lon_min=None, lat_max=None, lon_max=None, lat_min=None, target_transform=None, target_shape=None, binary=True):
     """
     Loads the WorldCereal crop mask and optionally crops it based on provided longitude and latitude boundaries.
 
@@ -43,11 +43,74 @@ def load_worldcereal_crop_mask(lon_min=None, lat_max=None, lon_max=None, lat_min
 
         crs = crop_mask_src.crs
 
+    if target_transform and target_shape:
+        crop_mask = reproject_raster(source_array=crop_mask, source_transform=transform, source_crs=crs,
+                                     target_transform=target_transform, target_shape=target_shape)
+        transform = target_transform
+
     # make binary map based on 50% threshold
     if binary:
         crop_mask = crop_mask > 50
 
     return crop_mask, transform, crs
+
+
+def reproject_raster(
+    source_array,
+    source_transform,
+    source_crs,
+    target_transform,
+    target_shape,
+    target_crs=None,
+    src_nodata=None,
+    dst_nodata=None
+):
+    """
+    Reprojects a raster data array to match a target transform and shape.
+
+    Args:
+        source_array (numpy.ndarray): Source raster data array (2D or 3D).
+        source_transform (affine.Affine): Affine transform of the source raster.
+        source_crs (rasterio.crs.CRS or str): Coordinate reference system of the source raster.
+        target_transform (affine.Affine): Target affine transform.
+        target_shape (tuple of int): Target shape (height, width).
+        target_crs (rasterio.crs.CRS or str, optional): Coordinate reference system of the target raster.
+                                                        If None, uses source_crs.
+        src_nodata (int or float, optional): NoData value for the source raster.
+        dst_nodata (int or float, optional): NoData value for the destination raster.
+
+    Returns:
+        numpy.ndarray: Reprojected raster data array matching the target transform and shape.
+    """
+
+    if target_crs is None:
+        target_crs = source_crs
+
+    # Prepare the destination array
+    if source_array.ndim == 2:
+        # Single band
+        destination = np.empty(target_shape, dtype=source_array.dtype)
+    elif source_array.ndim == 3:
+        # Multiple bands
+        num_bands = source_array.shape[0]
+        destination = np.empty((num_bands, target_shape[0], target_shape[1]), dtype=source_array.dtype)
+    else:
+        raise ValueError("Source array must be 2D (single band) or 3D (multi-band).")
+
+    # Reproject the raster data
+    reproject(
+        source=source_array,
+        destination=destination,
+        src_transform=source_transform,
+        src_crs=source_crs,
+        dst_transform=target_transform,
+        dst_crs=target_crs,
+        src_nodata=src_nodata,
+        dst_nodata=dst_nodata,
+        resampling=Resampling.average
+    )
+
+    return destination
 
 
 def weighted_avg_over_crop_mask(crop_mask, data_image, instance_name, region_name, warn_spread_above=False):
@@ -114,39 +177,3 @@ def load_geoglam_crop_mask(lon_min=None, lat_max=None, lon_max=None, lat_min=Non
         crs = crop_mask_src.crs
 
     return crop_mask, transform, crs
-
-
-def shrink_image(input_path, output_path, factor):
-    # Open the source TIFF file
-    with rasterio.open(input_path) as src:
-        # Calculate the new dimensions
-        new_width = src.width // factor
-        new_height = src.height // factor
-        new_transform = src.transform * src.transform.scale(
-            (src.width / new_width),
-            (src.height / new_height)
-        )
-
-        # Define the metadata for the output file
-        kwargs = src.meta.copy()
-        kwargs.update({
-            'width': new_width,
-            'height': new_height,
-            'transform': new_transform
-        })
-
-        # Open the destination file
-        with rasterio.open(output_path, 'w', **kwargs) as dst:
-            for i in range(1, src.count + 1):
-                # Read the data and resample it
-                data = src.read(
-                    i,
-                    out_shape=(
-                        src.count,
-                        new_height,
-                        new_width
-                    ),
-                    resampling=Resampling.bilinear
-                )
-                # Write the resampled data to the destination file
-                dst.write(data, i)
