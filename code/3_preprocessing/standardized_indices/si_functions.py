@@ -1,59 +1,82 @@
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from scipy.stats import gamma, norm
 
 from crop_calendar.profile_generation import make_profiles, get_day_of_year
 
 
-def generate_si(folder_path, file_name, min_avg=None):
+def generate_si(folder_path, file_name, si_file_name, gaussian_rolling_averge_window_size=None, distibution="gaussian"):
     """
 
-    :param min_avg: this parameter defines a theshold under which the si values are not calculated
-    and instead it all gives 0.
-    The background is that for precipitaiton there are areas and dekades with barely any precipitation.
-    Those can be ignored. (usually not even part of the crop season)
+    :param gaussian_rolling_averge_window_size: (optional) applies rolling average. Especially interesting for
+    precipitation data with sparse data or noisy data (remote sensing)
     :return: df of si values
     """
     data_df = pd.read_csv(folder_path / file_name, keep_default_na=False)
-    data_df = data_df[~data_df.country.isin(["Ethiopia", "Kenya"])].reset_index(drop=True) #TODO: delete line
-
-    # generate profile matrix (average over years)
-    profile_mtx = make_profiles(data_df)
 
     # extract the day of year (doy) for each value column
     value_columns = [column for column in data_df.columns if column[:4].isdigit()]
     doy_ls = np.array([get_day_of_year(date) for date in value_columns])
+    # handle leap year
+    doy_ls[doy_ls > 365] = 365
 
     # create ni dataframe to be filled with ni values in a loop over the rows
-    si_df = data_df.copy()
+    si_2darray = np.zeros((len(data_df), len(value_columns)))
 
     for i, row in data_df.iterrows():
-        print(i, end='\r')
+        print(f"Processing {si_file_name} ({i + 1}/{len(data_df)})", end='\r')
         values = row[value_columns].values
         # Convert strings to floats and use None for empty strings
         values = [float(x) if isinstance(x, str) and x else np.nan if x == "" else x for x in values]
+
         # Fill empty stings with nearest kneighbors
         if np.any(np.isnan(values)):
             values = [np.nanmean(values[j-1:j+2]) if not x else x for j, x in enumerate(values)]
 
-        avg_values = profile_mtx[i][doy_ls - 1]
-        divergence = values - avg_values
+        # apply gaussian rolling average if wanted
+        if gaussian_rolling_averge_window_size:
+            values = pd.Series(values).rolling(window=gaussian_rolling_averge_window_size,
+                                               win_type='gaussian',
+                                               min_periods=1,
+                                               center=True).mean(std=gaussian_rolling_averge_window_size/3)
+        values = np.array(values)
 
         # calculate the stnd. dev. for each doy individually (its very different across the year)
         for doy in doy_ls:
             doy_ix_ls = doy_ls == doy
 
-            # check if average is above threhold
-            if min_avg:
-                if np.mean(np.array(values)[doy_ix_ls]) < min_avg:
-                    si_df.loc[i, np.array(value_columns)[doy_ix_ls]] = 0
-                    continue
+            doy_values = values[doy_ix_ls]
 
-            # calculate ni
-            si_values = divergence[doy_ix_ls] / np.std(divergence[doy_ix_ls])
-            # fill into dataframe
-            si_df.loc[i, np.array(value_columns)[doy_ix_ls]] = si_values
+            # if one day has the value 0 (usually in the case of exact 0 precipitation) we skip it (set to 0)
+            if np.any(doy_values == 0):
+                si_2darray[i, doy_ix_ls] = 0
+                continue
+
+            # calculate si
+            if distibution == "gaussian":
+                doy_values = doy_values - np.mean(doy_values)
+                assert np.std(doy_values) > 0
+                si_values = doy_values / np.std(doy_values)
+            elif distibution == "gamma":
+                # Fit a gamma distribution to the non-zero precipitation data
+                params = gamma.fit(doy_values[doy_values > 0], floc=0)
+                shape, loc, scale_param = params
+
+                # Calculate cumulative probabilities for all data (including zeros)
+                cdf_values = gamma.cdf(doy_values, shape, loc=loc, scale=scale_param)
+
+                # Convert cumulative probabilities to SPI values using the standard normal distribution
+                si_values = norm.ppf(cdf_values)
+            else:
+                raise AssertionError(f"Unexpected probability distribution input: {distibution}")
+
+            si_2darray[i, doy_ix_ls] = si_values
+
+    # fill into dataframe
+    si_df = data_df.copy()
+    si_df.loc[:, np.array(value_columns)] = si_2darray
 
     # save the hard work
-    si_df.to_csv(folder_path / "_".join(["si", file_name]), index=False)
+    si_df.to_csv(folder_path / si_file_name, index=False)
     return si_df

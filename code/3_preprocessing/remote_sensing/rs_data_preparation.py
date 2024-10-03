@@ -34,7 +34,6 @@ date_list = [file_name[18:28] for file_name in ndvi_image_filename_list]
 # create ndvi datasets for average values
 ndvi_data = adm_map.copy()
 quality_data = adm_map.copy()
-
 # make date columns to fill in a loop in the next step
 for date in date_list:
     ndvi_data[date] = np.nan
@@ -170,6 +169,3 @@ quality_data.drop("geometry", axis=1).to_csv(PROCESSED_DATA_DIR / "remote sensin
 with open(PROCESSED_DATA_DIR / "remote sensing/ndvi_histograms.pickle", 'wb') as f:
     # Pickle the 'data' dictionary using the highest protocol available.
     pickle.dump(historgram_dict, f, pickle.HIGHEST_PROTOCOL)
-
-
-#smooth_ndvi_data.drop("geometry", axis=1).to_csv(PROCESSED_DATA_DIR / "remote sensing/smooth_ndvi_regional_matrix.csv", index=False)

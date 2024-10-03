@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from config import PROCESSED_DATA_DIR
+from config import PROCESSED_DATA_DIR, SOURCE_DATA_DIR
 from crop_calendar.crop_calendar_functions import make_cc, plot_my_crop_calendar, plot_season_length
 from maps.map_functions import load_aoi_map
 
@@ -18,16 +18,14 @@ adm_map['centroid'] = adm_map.representative_point()
 ndvi_df = pd.read_csv(PROCESSED_DATA_DIR / "remote sensing/cleaned_ndvi_regional_matrix.csv", keep_default_na=False)
 
 # load precipitation data
-preci_df = pd.read_csv(PROCESSED_DATA_DIR / "climate/pr_sum_regional_matrix.csv", keep_default_na=False)
+preci_df = pd.read_csv(PROCESSED_DATA_DIR / "climate/preci_regional_matrix.csv", keep_default_na=False)
 
-# load ASAP crop calendar (cc) for comparison
-asap_cc_df = pd.read_csv(PROCESSED_DATA_DIR / "crop calendar/processed_crop_calendar.csv", keep_default_na=False)
-asap_cc_df = asap_cc_df[~asap_cc_df.country.isin(["Ethiopia", "Kenya"])]
-asap_cc_df.iloc[:, 4:] = (asap_cc_df.iloc[:, 4:] - 1) * 10 + 1
+# load FAO crop calendar (cc) for comparison
+fao_cc_df = pd.read_csv(SOURCE_DATA_DIR / "crop calendar/FAO/crop_calendar.csv", keep_default_na=False)
 
-adm_map["sos"], adm_map["eos"] = make_cc(asap_cc_df=asap_cc_df,
+adm_map["sos"], adm_map["eos"] = make_cc(fao_cc_df=fao_cc_df,
                                          ndvi_df=ndvi_df, preci_df=preci_df,
-                                         threshold=.3,
+                                         threshold=.5,
                                          plot=True)
 
 adm_map["season_length"] = adm_map["eos"] - adm_map["sos"]
