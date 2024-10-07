@@ -1,4 +1,3 @@
-import time
 wait_minutes = 380
 for i in range(wait_minutes):
     print(f"{wait_minutes - i} minutes until the script starts.........", end="\r")
@@ -9,19 +8,15 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-from sklearn.decomposition import PCA
-
 from feature_selection import feature_selection_vif, feature_selection_corr_test
 
 from config import BASE_DIR
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 
-from data_loader import load_yield_data, load_my_cc, load_cluster_data, load_soil_data, load_processed_features, \
+from data_loader import load_yield_data, load_cluster_data, load_processed_features, \
     load_soil_pca_data
-from optuna_modeling.feature_sets_for_optuna import feature_location_dict
-from data_assembly import process_list_of_feature_df, make_adm_column, make_X, make_dummies
+from data_assembly import make_X, make_dummies
 from run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer import OptunaOptimizer
 import optuna

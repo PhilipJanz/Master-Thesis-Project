@@ -3,7 +3,6 @@ import pickle
 import pandas as pd
 
 from config import PROCESSED_DATA_DIR
-from data_assembly import make_adm_column
 
 # variables for filtering data
 harv_year_range = (2001, 2023)
@@ -11,6 +10,15 @@ harv_year_range = (2001, 2023)
 # variables for unit test (please alter if changes in the yield database occure)
 # set 'None' to deactivate a test
 yield_datapoints_after_filtering = 1927
+
+
+def make_adm_column(df):
+    """
+    Create common 'adm' column for faster matching of dataframes
+    It units country, adm1 and adm2
+    """
+    df["adm"] = [str(x).replace("'", "").replace(" None", "") for x in df[["country", "adm1", "adm2"]].values]
+    return df
 
 
 def load_yield_data():

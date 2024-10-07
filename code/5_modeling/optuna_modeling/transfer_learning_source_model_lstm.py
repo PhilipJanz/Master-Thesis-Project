@@ -3,20 +3,14 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-from sklearn.decomposition import PCA
-
-from config import SEED, BASE_DIR, PROCESSED_DATA_DIR
+from config import SEED, BASE_DIR
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
-from tensorflow.keras.models import Model
 
-from data_loader import load_yield_data, load_my_cc, load_cluster_data, load_soil_data, load_processed_features, \
+from data_loader import load_yield_data, load_cluster_data, load_processed_features, \
     load_soil_pca_data
-from optuna_modeling.feature_sets_for_optuna import feature_location_dict
-from data_assembly import process_list_of_feature_df, make_adm_column, make_X, make_dummies
+from data_assembly import make_X, make_dummies
 from run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer import OptunaOptimizer
 import optuna

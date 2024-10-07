@@ -10,6 +10,7 @@ from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR
 from crop_mask.crop_mask_functions import weighted_avg_over_crop_mask, load_worldcereal_crop_mask
 from maps.map_functions import load_aoi_map
 from remote_sensing.rs_functions import custom_rolling_average, fill_missing_values
+from crop_calendar.profile_generation import get_day_of_year
 
 """
 This script prepares the remote sensing data from MODIS vegetation indices (VI)
@@ -102,17 +103,22 @@ for date, ndvi_image_filename in zip(date_list, ndvi_image_filename_list):
 
 ### FILLING MISSING VALUES ####
 
+doy_ls = np.array([get_day_of_year(date) for date in date_list])
 cleaned_ndvi_data = ndvi_data.copy()
 for i in range(len(ndvi_data)):
-    _, cleaned_ndvi_data.iloc[i, 5:] = fill_missing_values(data=ndvi_data.values[i, 5:], periode_length_guess=365/16, N=4)
+    _, fitted_values, cleaned_ndvi_data.iloc[i, 5:] = fill_missing_values(doy_ls=doy_ls,
+                                                                          data=ndvi_data.values[i, 5:],
+                                                                          periode_length_guess=365,
+                                                                          N=5)
 
 
 plt.plot(ndvi_data.values[i, 5:], 'o-', label="Qualitative NDVI-values")
-plt.plot(cleaned_ndvi_data.iloc[i, 5:], linestyle="--", alpha=.85, label="Sine Approximation")
+plt.plot(cleaned_ndvi_data.iloc[i, 5:], linestyle="--", alpha=.85, label="Fourier Approximation")
 plt.ylabel("NDVI")
 plt.legend(loc="upper right")
 plt.title("Filling missing values in NDVI curves")
 plt.show()
+
 
 ### VISUALIZE DATA QUALITY #####
 # example from Tanzania

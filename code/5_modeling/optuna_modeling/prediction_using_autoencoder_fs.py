@@ -12,7 +12,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
 from data_loader import load_yield_data, load_my_cc, load_cluster_data, load_soil_data
-from optuna_modeling.feature_sets_for_optuna import feature_location_dict
+from feature_location import feature_location_dict
 from data_assembly import process_list_of_feature_df, make_adm_column, make_X, make_dummies
 from run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer import OptunaOptimizer

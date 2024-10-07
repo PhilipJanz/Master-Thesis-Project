@@ -1,4 +1,4 @@
-from config import RESULTS_DATA_DIR, SEED
+from config import SEED
 from copy import deepcopy
 
 import optuna
@@ -16,11 +16,11 @@ import tensorflow as tf
 #tf.keras.config.disable_interactive_logging()
 tf.random.set_seed(SEED)
 from tensorflow.keras import Sequential
-from tensorflow.keras.models import clone_model, Model
+from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dropout, LSTM, Dense, concatenate
 
 from data_assembly import rescale_array, group_years
-from optuna_modeling.feature_sets_for_optuna import feature_sets
+from feature_location import feature_sets
 
 
 def create_nn(trial=None, params=None):

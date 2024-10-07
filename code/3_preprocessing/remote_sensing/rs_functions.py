@@ -64,32 +64,30 @@ def custom_rolling_average(data, window):
     return result
 
 
-def fill_missing_values(data, periode_length_guess, N):
+def fill_missing_values(doy_ls, data, N):
     # Define the Fourier series function
-    def sine_approximation(t, *a):
+    def fourier_approximation(t, *a):
         ret = a[0] / 2  # a_0 / 2 term
-        periode_length = a[1]
         n_harmonics = (len(a) - 1) // 2
         for i in range(n_harmonics):
-            ret += a[2 * i + 2] * np.sin(2 * np.pi * (i + 1) * t / periode_length + a[2 * i + 3])
+            ret += a[2 * i + 1] * np.sin(2 * np.pi * (i + 1) * t / 365) + a[2 * i + 2] * np.cos(2 * np.pi * (i + 1) * t / 365)
         return ret
 
     # setup data
     qualitative_data_loc = ~pd.isnull(data)
     qualitative_data = data[qualitative_data_loc]
-    time_stamps = np.arange(len(data))
+    time_stamps = doy_ls
     qualitative_time_stamps = time_stamps[qualitative_data_loc]
 
     # Initial guess for the coefficients
-    initial_guess = np.zeros(2 * N + 2)
+    initial_guess = np.zeros(2 * N + 1)
     initial_guess[0] = np.max(qualitative_data) - np.min(qualitative_data)
-    initial_guess[1] = periode_length_guess
 
     # Curve fitting
-    params, params_covariance = curve_fit(sine_approximation, qualitative_time_stamps, qualitative_data, p0=initial_guess)
+    params, params_covariance = curve_fit(fourier_approximation, qualitative_time_stamps, qualitative_data, p0=initial_guess)
 
     # Generate fitted values for desired time stamps
-    fitted_values = sine_approximation(time_stamps, *params)
+    fitted_values = fourier_approximation(time_stamps, *params)
     filled_data = data.copy()
     filled_data[~qualitative_data_loc] = fitted_values[~qualitative_data_loc]
-    return time_stamps, filled_data
+    return time_stamps, fitted_values, filled_data
