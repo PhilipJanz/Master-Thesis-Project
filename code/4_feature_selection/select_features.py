@@ -13,10 +13,10 @@ from data_loader import load_yield_data
 # INITIALIZATION ###############
 
 # indicator for feature file name given preprocessing specifications (see process_designed_features.py)
-feature_file_name = "6_60_60"
+feature_file_name = "3_60_60"
 
 # geographic scale of FS (country, adm, ...)
-data_split = "country"
+data_split = "adm"
 
 # VIF threshold
 vif_threshold = 5
@@ -35,7 +35,7 @@ feature_df = pd.read_csv(feature_path, keep_default_na=False)
 assert np.all(feature_df[["adm", "harv_year"]] == yield_df[["adm", "harv_year"]])
 
 # add target variable to feature df
-feature_df["y"] = yield_df["yield_anomaly"]
+feature_df["y"] = yield_df["standardized_yield"]
 
 
 # EXECUTION ########################
@@ -48,7 +48,7 @@ for name, subset_df in feature_df.groupby(data_split):
         print(name, leave_out_year, end="\r")
         train_subset_df = subset_df[subset_df["harv_year"] != leave_out_year]
         y = train_subset_df["y"]
-        X = train_subset_df.drop(['country', 'adm1', 'adm2', 'adm', 'harv_year', 'yield'], axis=1)
+        X = train_subset_df.drop(['country', 'adm1', 'adm2', 'adm', 'harv_year', 'y'], axis=1)
         feature_selection_dict[name][leave_out_year] = mi_vif_selection(X=X, y=y, vif_threshold=vif_threshold)
 
 
