@@ -31,7 +31,8 @@ def mi_vif_selection(X, y, vif_threshold=5):
         mi = corr_based_mutual_info(X, y)
 
     mi_series = pd.Series(mi, index=X.columns)
-    mi_series[mi_series > 0]
+    # filter features with fading MI
+    mi_series = mi_series[mi_series > 1e-3]
 
     # Step 2: Sort features based on MI in descending order
     mi_sorted = mi_series.sort_values(ascending=False)

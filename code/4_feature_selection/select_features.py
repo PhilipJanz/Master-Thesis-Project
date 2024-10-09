@@ -34,8 +34,8 @@ feature_df = pd.read_csv(feature_path, keep_default_na=False)
 # test if datasets have same row order
 assert np.all(feature_df[["adm", "harv_year"]] == yield_df[["adm", "harv_year"]])
 
-# merge
-feature_df["yield"] = yield_df["yield"]
+# add target variable to feature df
+feature_df["y"] = yield_df["yield_anomaly"]
 
 
 # EXECUTION ########################
@@ -47,7 +47,7 @@ for name, subset_df in feature_df.groupby(data_split):
     for leave_out_year in subset_df["harv_year"].unique():
         print(name, leave_out_year, end="\r")
         train_subset_df = subset_df[subset_df["harv_year"] != leave_out_year]
-        y = train_subset_df["yield"]
+        y = train_subset_df["y"]
         X = train_subset_df.drop(['country', 'adm1', 'adm2', 'adm', 'harv_year', 'yield'], axis=1)
         feature_selection_dict[name][leave_out_year] = mi_vif_selection(X=X, y=y, vif_threshold=vif_threshold)
 
