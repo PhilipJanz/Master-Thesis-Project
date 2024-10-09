@@ -15,7 +15,7 @@ This script processes features based on feature design.
 # INITIALIZATION  ####################################################################################################
 
 # length of timeseries of remotes sensing and meteorological features
-ts_length = 6
+ts_length = 3
 
 # move the time-window for inference based on the crop calendar (in days)
 start_before_sos = 60
@@ -66,7 +66,7 @@ processed_features_df[id_columns] = yield_df[id_columns]
 
 # save Dataframe
 save_path = PROCESSED_DATA_DIR / f"features/processed_designed_features_df_{ts_length}_{start_before_sos}_{end_before_eos}.csv"
-processed_features_df.to_csv(save_path)
+processed_features_df.to_csv(save_path, index=False)
 
 #with open(PROCESSED_DATA_DIR / f"features/processed_designed_features_df_{ts_length}_{start_before_sos}_{end_before_eos}.pkl", 'wb') as f:
     # Pickle using the highest protocol available.
