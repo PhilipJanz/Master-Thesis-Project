@@ -17,11 +17,13 @@ ZAMBIA_COLOR = "#9467bd"
 KENYA_COLOR = "#1f77b4"
 MALAWI_COLOR = "#d62728"
 ETHIOPIA_COLOR = "#ff7f0e"
-COUNTRY_COLORS = {#"Ethiopia": ETHIOPIA_COLOR,
-                  #"Kenya": KENYA_COLOR,
-                  "Tanzania": TANZANIA_COLOR,
+COUNTRY_COLORS = {"Tanzania": TANZANIA_COLOR,
                   "Zambia": ZAMBIA_COLOR,
                   "Malawi": MALAWI_COLOR}
+COUNTRY_MARKERS = {"Tanzania": "o",
+                   "Zambia": "s",
+                   "Malawi": "v"}
+
 
 # (area of interest) coordinates for a rectangular area: (min Lon, min Lat, max Lon, max Lat)
 AOI = [22, -18, 40.5, -1]

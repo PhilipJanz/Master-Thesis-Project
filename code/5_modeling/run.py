@@ -23,6 +23,7 @@ def open_run(run_name):
 class Run:
     def __init__(self,
                  name,
+                 objective,
                  cluster_set,
                  model_types,
                  timeout,
@@ -30,6 +31,7 @@ class Run:
                  n_startup_trials,
                  python_file):
         self.name = name
+        self.objective = objective
         self.cluster_set = cluster_set
         self.model_types = model_types
         self.timeout = timeout
@@ -91,9 +93,9 @@ class Run:
 
             performance_dict["avg_opt_trials"].append(np.mean(adm_prediction_df["n_opt_trials"]))
             performance_dict["avg_train_mse"].append(np.mean(adm_prediction_df["train_mse"]))
-            mse = np.mean((adm_prediction_df["y_pred"] - adm_prediction_df["yield_anomaly"]) ** 2)
+            mse = np.mean((adm_prediction_df["y_pred"] - adm_prediction_df[self.objective]) ** 2)
             performance_dict["mse"].append(mse)
-            performance_dict["nse"].append(1 - mse / np.var(adm_prediction_df["yield_anomaly"]))
+            performance_dict["nse"].append(1 - mse / np.var(adm_prediction_df[self.objective]))
 
         # save it
         pd.DataFrame(performance_dict).to_csv(self.run_dir / "performance.csv", index=False)
@@ -144,9 +146,9 @@ class Run:
         performance_dict = {"cluster_name": [], "year": [], "mse": [], "nse": []}
         for adm_year, adm_year_results_df in result_df.groupby(["adm1_", "harv_year"]):
 
-            mse = np.mean((adm_year_results_df["y_pred"] - adm_year_results_df["yield_anomaly"]) ** 2)
+            mse = np.mean((adm_year_results_df["y_pred"] - adm_year_results_df[self.objective]) ** 2)
 
-            nse = 1 - mse / np.mean(adm_year_results_df["yield_anomaly"] ** 2)
+            nse = 1 - mse / np.mean(adm_year_results_df[self.objective] ** 2)
 
             # fill dict
             performance_dict["cluster_name"].append(adm_year[0])

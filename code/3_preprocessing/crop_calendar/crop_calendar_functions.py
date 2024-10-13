@@ -166,7 +166,7 @@ def plot_my_crop_calendar(cc_df):
     cbar.set_ticks(ticks[(ticks >= vmin) & (ticks <= vmax)])
     cbar.set_ticklabels(ticklabels[(ticks >= vmin) & (ticks <= vmax)])
     # Save plot if wanted
-    plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/maps/my_cc_sos_eos.jpg", dpi=1500)
+    plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/maps/my_cc_sos_eos.pdf", format="pdf")
     plt.show()
 
 
@@ -284,19 +284,25 @@ def make_cc(fao_cc_df, ndvi_df, preci_df, threshold=.25, plot=False):
             ax1 = fig.add_subplot(gs[0])
             ax2 = fig.add_subplot(gs[1])
             ax3 = fig.add_subplot(gs[2])
-            ax1.scatter(preci_day_of_year, preci_values, alpha=0.25)
+            ax1.scatter(preci_day_of_year, preci_values, alpha=0.2)
             ax1.plot(np.arange(1, 366), preci_profile, linewidth=3, color="tab:orange",
                      label="Fourier approximation (N=5)")
             ax1.set_ylabel("Precipitation (mm)")
             ax1.legend()
 
-            ax2.scatter(ndvi_day_of_year, ndvi_values, color="tab:green", alpha=0.4)
+            ax2.scatter(ndvi_day_of_year, ndvi_values, color="tab:green", alpha=0.3)
             ax2.plot(np.arange(1, 366), ndvi_profile, linewidth=3, color="tab:orange",
                      label="Fourier approximation (N=5)")
-            ax2.vlines(x=[sos, eos], ymin=min(ndvi_values), ymax=max(ndvi_values),
+            ax2.vlines(x=[sos], ymin=min(ndvi_values), ymax=max(ndvi_values),
+                       alpha=.6,
                        linestyles="dotted",
                        color="tab:red",
-                       label="My CC")
+                       label="Start of Season")
+            ax2.vlines(x=[eos], ymin=min(ndvi_values), ymax=max(ndvi_values),
+                       alpha=.6,
+                       linestyles="dashed",
+                       color="tab:red",
+                       label="End of Season")
             ax2.set_ylabel("NDVI")
             ax2.legend()
 
@@ -305,7 +311,7 @@ def make_cc(fao_cc_df, ndvi_df, preci_df, threshold=.25, plot=False):
                              (region_cc.values[0, -2], region_cc.values[0, -1])]
 
             # Plot each season as a rectangle
-            for i, (name, (start, end), color) in enumerate(zip(interval_names, interval_doys, ["green", "brown"])):
+            for i, (name, (start, end), color) in enumerate(zip(interval_names, interval_doys, ["brown", "green"])):
                 height = i * .4 + .1
                 if start < end:
                     rect = Rectangle((start, height), end - start, 0.3, color=color, alpha=0.5)
@@ -327,10 +333,10 @@ def make_cc(fao_cc_df, ndvi_df, preci_df, threshold=.25, plot=False):
             ax2.set_xlim(-10, 375)
             ax3.set_xlim(-10, 375)
 
-            fig.suptitle(
-                f"Crop Calendar (CC) estimation based on NDVI profile for '{region_name}'\nwith FAO CC for comparison")
-            plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/profiles/profile_{region_name}",
-                        dpi=300)
+            #fig.suptitle(
+            #    f"Crop Calendar (CC) estimation based on NDVI profile for '{region_name}'\nwith FAO CC for comparison")
+            plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/profiles/profile_{region_name}.pdf",
+                        format="pdf")
             plt.close(fig)
         #plt.show()
         #break

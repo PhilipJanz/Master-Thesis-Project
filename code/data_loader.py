@@ -2,7 +2,7 @@ import pickle
 
 import pandas as pd
 
-from config import PROCESSED_DATA_DIR
+from config import PROCESSED_DATA_DIR, FEATURE_SELECTION_DIR
 
 # variables for filtering data
 harv_year_range = (2001, 2023)
@@ -48,7 +48,11 @@ def load_soil_pca_data(pc_number):
     return pd.read_csv(PROCESSED_DATA_DIR / f"features/soil_pca_{pc_number}.csv", keep_default_na=False)
 
 
-def load_processed_features(ts_length):
-    with open(PROCESSED_DATA_DIR / f"features/processed_feature_df_dict_{ts_length}.pkl", 'rb') as file:
-        processed_feature_df_dict = pickle.load(file)
-    return processed_feature_df_dict
+def load_processed_features(feature_code):
+    return pd.read_csv(PROCESSED_DATA_DIR / f"features/processed_designed_features_df_{feature_code}.csv", keep_default_na=False)
+
+
+def load_feature_selection(feature_selection_file=None):
+    with open(FEATURE_SELECTION_DIR / f'{feature_selection_file}.pkl', 'rb') as file:
+        feature_selection_dict = pickle.load(file)
+    return feature_selection_dict

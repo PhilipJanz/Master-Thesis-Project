@@ -22,7 +22,7 @@ def plot_performance_map(performance_data, performance_column, result_filename):
     fig, ax = plt.subplots(figsize=(10, 12))
 
     # Plot country maps as background
-    africa_map[africa_map.NAME.isin(geo_performance_data.country.unique())].plot(color="#e6e6e6", edgecolor="white", linewidth=2, ax=ax)
+    africa_map[africa_map.NAME.isin(geo_performance_data["country"].unique())].plot(color="#e6e6e6", edgecolor="white", linewidth=2, ax=ax)
 
     # Plot NSE
     cmap = "RdYlGn"

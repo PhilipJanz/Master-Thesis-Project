@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from config import RESULTS_DATA_DIR
+from config import RESULTS_DATA_DIR, COUNTRY_COLORS
 from run import open_run
 from visualizations.visualization_functions import plot_performance_map, plot_map
 
@@ -20,7 +20,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '0901_yield_adm_xgb_3_300_250_100_5'
+run_name = '1010_yield_country_xgb_3_60_60_optuna_600_250_100_5'
 #run = open_run(run_name=run_name)
 #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
 #for i, (name, model) in enumerate(model_dir.items()):
@@ -36,7 +36,7 @@ if "anomaly" in run_name:
 else:
     objective = "yield"
 
-performance_dict = {"adm": [], "mse": [], "nse": []}
+performance_dict = {"country": [], "adm": [], "n": [], "mse": [], "nse": []}
 for adm, adm_results_df in result_df.groupby("adm"):
     y_true = adm_results_df[objective]
 
@@ -47,7 +47,9 @@ for adm, adm_results_df in result_df.groupby("adm"):
     else:
         nse = 1 - mse / np.mean((y_true - np.mean(y_true)) ** 2)
     # fill dict
+    performance_dict["country"].append(adm_results_df["country"].values[0])
     performance_dict["adm"].append(adm)
+    performance_dict["n"].append(len(adm_results_df))
     performance_dict["mse"].append(mse)
     performance_dict["nse"].append(nse)
     """
@@ -64,5 +66,11 @@ performance_df = pd.DataFrame(performance_dict)
 print(run_name, "avg NSE:", np.round(np.mean(performance_dict["nse"]), 2))
 
 # plot results as a map
-plot_performance_map(performance_data=performance_df, performance_column="nse", result_filename=run_name)
+plot_performance_map(performance_data=performance_df.drop("country", axis=1), performance_column="nse", result_filename=run_name)
 
+
+for c, country_df in performance_df.groupby("country"):
+    plt.scatter(country_df["n"], country_df["nse"], color="grey", alpha=0.6, marker='s')
+plt.xlabel("Number of data points in region")
+plt.ylabel("NSE")
+plt.show()

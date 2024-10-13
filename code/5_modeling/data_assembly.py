@@ -8,6 +8,7 @@ from collections import defaultdict
 from sklearn.preprocessing import StandardScaler
 
 from config import PROCESSED_DATA_DIR, SEED
+from data_loader import make_adm_column
 
 
 def make_X(df_ls, standardize=True):
