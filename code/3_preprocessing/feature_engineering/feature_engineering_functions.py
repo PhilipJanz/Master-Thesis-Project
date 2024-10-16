@@ -184,7 +184,7 @@ def rescale_array(arr, new_length):
         original_length = len(arr)
         if new_length == original_length:
             return arr
-        elif new_length > original_length:
+        elif (new_length > original_length) | (new_length > 10):
             # Create an array of the new indices, scaled appropriately
             new_indices = np.linspace(0, original_length - 1, new_length)
 

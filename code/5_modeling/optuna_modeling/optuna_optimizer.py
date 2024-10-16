@@ -1,3 +1,5 @@
+from optuna import TrialPruned
+
 from config import SEED
 from copy import deepcopy
 
@@ -77,7 +79,7 @@ class OptunaOptimizer:
     :param y: (n)-array
     :param years: (n)-array: important since we so 'leave-year-out-CV'
     :param best_params: usually None because that's the goal of optimization. But it can be used for model transfer
-    :param model_types: list of  model names to be considered. Subset of ['svr', 'rf', 'lasso', 'nn', 'xgb', 'lstm']
+    :param model_type:model name. from ['svr', 'rf', 'lasso', 'xgb']
     :param sampler: optuna sampler
     :param num_folds: n-fold for CV. num_folds > n_unique_years results into leave-one-year-out-CV
     :param repetition_per_fold: make more reliable parameter choice by training models multiple times
@@ -89,8 +91,9 @@ class OptunaOptimizer:
                  years,
                  best_params=None,
                  max_feature_len=10,
-                 model_types=['svr', 'rf', 'lasso', 'xgb'],
+                 model_type=None,
                  sampler=optuna.samplers.TPESampler,
+                 pruner=None,
                  num_folds=5,
                  repetition_per_fold=1):
         # init
@@ -98,13 +101,13 @@ class OptunaOptimizer:
         self.y = y
         self.years = years
         self.best_params = best_params
-        self.model_types = model_types
+        self.model_type = model_type
         self.num_folds = num_folds
         self.repetition_per_fold = repetition_per_fold
         self.max_feature_len = max_feature_len
 
         # Create a new Optuna study
-        self.study = optuna.create_study(study_name=study_name, direction="minimize", sampler=sampler)
+        self.study = optuna.create_study(study_name=study_name, direction="minimize", sampler=sampler, pruner=pruner)
 
     @ignore_warnings(category=ConvergenceWarning)
     def objective(self, trial):
@@ -114,16 +117,8 @@ class OptunaOptimizer:
             # mse of average predictor is the variance
             return np.mean(self.y ** 2)
 
-        # Select model type
-        if type(self.model_types) == str:
-            model_name = self.model_types
-        elif type(self.model_types) == list:
-            model_name = trial.suggest_categorical('model_type', self.model_types)
-        else:
-            raise AssertionError(f"Input for model_types is not str or list: {self.model_types}")
-
         # Generate params for model
-        model, params = init_model(model_name=model_name, trial=trial)
+        model, params = init_model(model_name=self.model_type, trial=trial)
 
         # shrink number of folds if wanted else make loyoCV
         if self.num_folds < len(np.unique(self.years)):
@@ -135,7 +130,7 @@ class OptunaOptimizer:
         # Save the error of each fold in a list
         mse_ls = []
         for _ in range(self.repetition_per_fold):
-            for fold_out in np.unique(folds):
+            for j, fold_out in enumerate(np.unique(folds)):
                 fold_out_bool = (folds == fold_out)
 
                 X_train, y_train = self.X[~fold_out_bool], self.y[~fold_out_bool]
@@ -152,6 +147,11 @@ class OptunaOptimizer:
                 # Calculate the RMSE and append it to the list
                 fold_mse = mean_squared_error(y_val, preds)
                 mse_ls.append(fold_mse)
+
+                trial.report(fold_mse, step=j)
+
+                if trial.should_prune():
+                    raise TrialPruned()
 
         return np.mean(mse_ls)
 
@@ -187,13 +187,7 @@ class OptunaOptimizer:
         """
         assert self.best_params, ".apply() applies optimal parameters that are found by .optimize() or by setting them: self.best_params = {...}"
 
-        # initialize model
-        if type(self.model_types) == str:
-            model_type = self.model_types
-        else:
-            model_type = self.best_params["model_type"]
-
-        model, _ = init_model(model_name=model_type, params=self.best_params)
+        model, _ = init_model(model_name=self.model_type, params=self.best_params)
 
         # Fit the model
         model.fit(X, y)

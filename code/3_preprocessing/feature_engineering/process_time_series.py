@@ -1,10 +1,12 @@
+import pickle
+
 import numpy as np
 
 import pandas as pd
 
 from config import PROCESSED_DATA_DIR
 from data_loader import load_yield_data, load_my_cc
-from feature_engineering.feature_engineering_functions import max_cdd, process_features_dict
+from feature_engineering.feature_engineering_functions import process_feature_dict
 
 """
 This script processes features based on feature design.
@@ -13,7 +15,7 @@ This script processes features based on feature design.
 # INITIALIZATION  ####################################################################################################
 
 # length of timeseries of remotes sensing and meteorological features
-ts_length = 3
+ts_length = 32
 
 # move the time-window for inference based on the crop calendar (in days)
 start_before_sos = 60
@@ -40,32 +42,41 @@ feature_location_dict = {"ndvi": "remote sensing/cleaned_ndvi_regional_matrix.cs
                          "temp": "climate/temp_regional_matrix.csv",
                          "sti": "climate/sti_regional_matrix.csv"}
 
-# coose a set of function to perform on the features or set None for only mean
-feature_engineering_dict = {"ndvi": {"mean": np.mean, "max": np.max, "min": np.min},
-                            "svi": None,
-                            "preci": {"max": np.max, "sum": np.sum, "max-cdd": max_cdd},
-                            "spi1": None,
-                            "spi6": None,
-                            "temp": {"mean": np.mean, "max": np.max, "min": np.min},
-                            "sti": None
+
+processed_features_ls = []
+feature_name_ls = []
+for feature_name, feature_path in feature_location_dict.items():
+    print(feature_name, end="\r")
+    feature_df = pd.read_csv(PROCESSED_DATA_DIR / feature_path, keep_default_na=False)
+
+    # apply CC for each yield datapoint
+    processed_feature_dict = process_feature_dict(yield_df=yield_df,
+                                                  cc_df=cc_df,
+                                                  feature_df=feature_df,
+                                                  feature_name=feature_name,
+                                                  length=ts_length,
+                                                  start_before_sos=start_before_sos,
+                                                  end_before_eos=end_before_eos)
+    feature_matrix = pd.DataFrame(processed_feature_dict).values
+    # standardize
+    if feature_name != "preci":
+        feature_matrix = feature_matrix - np.mean(feature_matrix)
+    feature_matrix = feature_matrix / np.std(feature_matrix)
+
+    # append to final array
+    feature_name_ls.append(np.array(list(processed_feature_dict.keys())))
+    processed_features_ls.append(feature_matrix)
+
+# form save file
+processed_timeserie_file = {"data": np.dstack(processed_features_ls),
+                            "feature_name": np.stack(feature_name_ls)
                             }
-
-# load and process features
-processed_features_dict = process_features_dict(yield_df=yield_df, cc_df=cc_df,
-                                                feature_location_dict=feature_location_dict,
-                                                feature_engineering_dict=feature_engineering_dict,
-                                                length=ts_length,
-                                                start_before_sos=start_before_sos, end_before_eos=end_before_eos)
-
-# form Dataframe
-processed_features_df = pd.DataFrame(processed_features_dict)
 id_columns = ["country", "adm1", "adm2", "adm", "harv_year"]
-processed_features_df[id_columns] = yield_df[id_columns]
+processed_timeserie_file["data_id"] = yield_df[id_columns]
 
-# save Dataframe
-save_path = PROCESSED_DATA_DIR / f"features/processed_designed_features_df_{ts_length}_{start_before_sos}_{end_before_eos}.csv"
-processed_features_df.to_csv(save_path, index=False)
-
+with open(PROCESSED_DATA_DIR / f"features/processed_timeseries_features_{ts_length}_{start_before_sos}_{end_before_eos}.pkl", 'wb') as f:
+    # Pickle using the highest protocol available.
+    pickle.dump(processed_timeserie_file, f, pickle.HIGHEST_PROTOCOL)
 
 # VISUALIZATION ##########################
 

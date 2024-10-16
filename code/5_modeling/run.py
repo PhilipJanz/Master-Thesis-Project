@@ -25,7 +25,7 @@ class Run:
                  name,
                  objective,
                  cluster_set,
-                 model_types,
+                 model_type,
                  timeout,
                  n_trials,
                  n_startup_trials,
@@ -33,7 +33,7 @@ class Run:
         self.name = name
         self.objective = objective
         self.cluster_set = cluster_set
-        self.model_types = model_types
+        self.model_type = model_type
         self.timeout = timeout
         self.n_trials = n_trials
         self.n_startup_trials = n_startup_trials
@@ -200,14 +200,23 @@ class Run:
 
         return params_df, feature_ls_ls
 
-    def save_model_and_params(self, name, model, params, model_type):
+    def save_shap(self, name, explainer, shap_data):
+        # save explainer
+        with open(self.run_dir / f"shap/{name}_explainer.pkl", 'wb') as f:
+            # Pickle using the highest protocol available.
+            pickle.dump(explainer, f, pickle.HIGHEST_PROTOCOL)
+
+        # save the shap values
+        shap_data.to_csv(self.run_dir / f"shap/{name}_shap.pkl", index=False)
+
+    def save_model_and_params(self, name, model, params):
         # save params dict
         with open(self.run_dir / f"params/{name}.pkl", 'wb') as f:
             # Pickle using the highest protocol available.
             pickle.dump(params, f, pickle.HIGHEST_PROTOCOL)
 
         # save the model
-        if model_type in ["nn", "lstm"]:
+        if self.model_type in ["nn", "lstm"]:
             model.save(self.run_dir / f"models/{name}.keras")
         else:
             with open(self.run_dir / f"models/{name}.pkl", 'wb') as f:

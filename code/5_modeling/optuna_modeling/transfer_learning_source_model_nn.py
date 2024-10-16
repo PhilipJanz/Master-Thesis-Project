@@ -1,25 +1,25 @@
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+import shap
+#os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+#os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 from sklearn.decomposition import PCA
 
-from config import SEED
+from config import SEED, BASE_DIR
 
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import Model
 
-from data_loader import load_yield_data, load_my_cc, load_cluster_data, load_soil_data
-from feature_location import feature_location_dict
-from data_assembly import process_list_of_feature_df, make_adm_column, make_X, make_dummies
+from data_loader import load_yield_data, load_soil_pca_data, load_processed_features
+from data_assembly import make_X, make_dummies
 from run import list_of_runs, Run, open_run
-from optuna_modeling.optuna_optimizer import OptunaOptimizer
+from optuna_modeling.optuna_optimizer_tf import OptunaOptimizerTF
 import optuna
 import tensorflow as tf
-tf.keras.config.disable_interactive_logging()
+
 tf.random.set_seed(SEED)
 
 # silence the message after each trial
@@ -43,49 +43,29 @@ There are two main loops:
         the picked hyperparameters and feature set are saved  for later investigation
 """
 
-# LOAD & PREPROCESS ####################################################################################################
-
-# load yield data and benchmark
-yield_df = load_yield_data()
-
-# load crop calendar (CC)
-cc_df = load_my_cc()
-
-# load and process features
-length = 5
-processed_feature_df_dict = process_list_of_feature_df(yield_df=yield_df, cc_df=cc_df,
-                                                       feature_dict=feature_location_dict,
-                                                       length=length,
-                                                       start_before_sos=30, end_before_eos=60)
-
-
-# load soil characteristics
-soil_df = load_soil_data()
-soil_df = make_adm_column(soil_df)
-pca = PCA(n_components=2)
-soil_df[["soil_1", "soil_2"]] = pca.fit_transform(soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']])
-print("explained_variance_ratio_ of PCA on soil:", pca.explained_variance_ratio_)
-soil_df = pd.merge(yield_df["adm"], soil_df, on=["adm"], how="left")
-soil_df = soil_df[["soil_1", "soil_2"]] # soil_df[['clay', 'elevation', 'nitrogen', 'phh2o', 'sand', 'silt', 'soc']]
-# scale each column (soil property) individually
-soil_df.iloc[:, :] = StandardScaler().fit_transform(soil_df.values)
-
-# load clusters
-cluster_df = load_cluster_data()
-yield_df = pd.merge(yield_df, cluster_df, how="left") # , on=["country", "adm1", "adm2"]
-
 # INITIALIZATION #######################################################################################################
 
-# choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
-yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]
-data_split = "country"
-assert data_split in yield_df.columns, f"The chosen cluster-set '{data_split}' is not occuring in the yield_df."
+# date of first execution of that run
+date = "1410"
 
 # define objective (target)
-objective = "yield_anomaly"
+objective = "yield"
 
+# choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
+data_split = "country"
+
+# processed feature code (feature len _ days before sos _ days before eos)
+feature_file = "6_60_60"
+
+# choose model or set of models that are used
+model_type = "nn"
+
+# number of principal components that are used to make soil-features (using PCA)
+soil_pc_number = 2
+
+# optuna hyperparameter optimization params
 # choose timeout
-timeout = 1800
+timeout = 3600
 # choose duration (sec) of optimization using optuna
 n_trials = 200
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
@@ -93,8 +73,23 @@ n_startup_trials = 50
 # folds of optuna hyperparameter search
 num_folds = 5
 
+
+# LOAD & PREPROCESS ####################################################################################################
+
+# load yield data and benchmark
+yield_df = load_yield_data()
+
+# load and process features
+processed_feature_df = load_processed_features(feature_file)
+# test if datasets have same row order
+assert np.all(processed_feature_df[["adm", "harv_year"]] == yield_df[["adm", "harv_year"]])
+processed_feature_df = processed_feature_df.drop(['country', 'adm1', 'adm2', 'adm', 'harv_year'], axis=1)
+
+# load soil characteristics
+soil_df = load_soil_pca_data(pc_number=2)
+
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = f"0823_{objective}_{data_split}_transferable-nn_{length}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
+run_name = f"{date}_{objective}_{data_split}_{model_type}_{feature_file}_optuna_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
 
 # load or create that run
 if run_name in list_of_runs():
@@ -105,14 +100,16 @@ if run_name in list_of_runs():
     yield_df["train_mse"] = pd.to_numeric(yield_df["train_mse"])
     yield_df["y_pred"] = pd.to_numeric(yield_df["y_pred"])
     yield_df["n_opt_trials"] = pd.to_numeric(yield_df["n_opt_trials"])
+    run.trans_dir = run.run_dir / "transfer_features"
 else:
     run = Run(name=run_name,
               cluster_set=data_split,
-              model_types="nn",
+              model_type="nn",
+              objective=objective,
               timeout=timeout,
               n_trials=n_trials,
               n_startup_trials=n_startup_trials,
-              python_file=os.path.abspath(__file__))
+              python_file=BASE_DIR / "code/5_modeling/optuna_modeling/transfer_learning_source_model_nn.py") #os.path.abspath(__file__))
     run.trans_dir = run.run_dir / "transfer_features"
     os.mkdir(run.trans_dir)
 
@@ -127,7 +124,7 @@ y = yield_df[objective]
 years = yield_df.harv_year
 
 # prepare predictors # [cluster_yield_df.harv_year] +
-predictors_list = [yield_df.harv_year] + [df.loc[yield_df.index] for df in processed_feature_df_dict.values()]
+predictors_list = [yield_df.harv_year] + [processed_feature_df]
 # add dummies for regions
 predictors_list.append(soil_df.loc[yield_df.index])
 predictors_list.append(make_dummies(yield_df))
@@ -169,26 +166,30 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
         # split the data
         X_train, y_train, years_train = X_source[~year_out_bool], y_source[~year_out_bool], years_source[~year_out_bool]
         X_test, y_test = X_source[year_out_bool], y_source[year_out_bool]
-        print(source_name, year_out, f"\nmse(train)={round(np.mean(y_train ** 2), 3)}")
 
         # hyperparameter-selection using optuna
         sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True,
                                              warn_independent_sampling=False, seed=SEED)
-        opti = OptunaOptimizer(X=X_train, y=y_train, years=years_train, predictor_names=feature_names_,
-                               sampler=sampler,
-                               model_types=run.model_types,
-                               feature_set_selection=False, feature_len_shrinking=False,
-                               num_folds=num_folds)
+        opti = OptunaOptimizerTF(study_name=f"{source_name}_{year_out}",
+                                 X=X_train, y=y_train, years=years_train,
+                                 sampler=sampler,
+                                 model_type=run.model_type,
+                                 num_folds=num_folds)
 
         mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
-                                         show_progress_bar=True, print_result=False, n_jobs=-1)
+                                         show_progress_bar=True, print_result=False, n_jobs=1)
+        run.save_optuna_study(study=opti.study)
 
         # train best model
-        _, _, trained_model = opti.train_best_model(X=X_train, y=y_train, predictor_names=feature_names_)
+        trained_model = opti.train_best_model(X=X_train, y=y_train)
 
         # predict train- & test-data
         y_pred_train = trained_model.predict(X_train).T[0]
         y_pred_test = trained_model.predict(X_test).T[0]
+
+        # estimate shap values
+        explainer = shap.DeepExplainer(trained_model, X_train)
+        shap_values = explainer.shap_values(X_test)
 
         # write the predictions into the result df
         train_mse = np.mean((y_pred_train - y_train) ** 2)
@@ -220,6 +221,10 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
         opti.best_params["feature_names"] = feature_names_
         run.save_model_and_params(name=f"{source_name}_{year_out}", model=trained_model, params=opti.best_params)
 
+        # save shapley values
+        run.save_shap(name=f"{source_name}_{year_out}", explainer=explainer,
+                      shap_data=pd.DataFrame(shap_values[:,:,0], columns=feature_names_))
+
         # extract learned features for all data by taking results of last hidden layer
         transfer_model = Model(inputs=trained_model.layers[0].input, outputs=trained_model.layers[-3].output)
         # Use the encoder model to transform the data
@@ -238,6 +243,7 @@ for source_name, source_yield_df in yield_df.groupby(data_split):
 
         # save run
         run.save()
+
 
     preds = yield_df.loc[source_yield_df.index]["y_pred"]
     y_ = y_source[~preds.isna()]

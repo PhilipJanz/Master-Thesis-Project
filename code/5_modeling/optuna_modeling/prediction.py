@@ -44,7 +44,7 @@ There are two main loops:
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "1010"
+date = "1510"
 
 # define objective (target)
 objective = "yield"
@@ -112,7 +112,7 @@ else:
     run = Run(name=run_name,
               cluster_set=data_split,
               objective=objective,
-              model_types=model_type,
+              model_type=model_type,
               timeout=timeout,
               n_trials=n_trials,
               n_startup_trials=n_startup_trials,
@@ -173,7 +173,7 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
         opti = OptunaOptimizer(study_name=f"{split_name}_{year_out}",
                                X=X_train, y=y_train, years=years_train,
                                sampler=sampler,
-                               model_types=run.model_types,
+                               model_types=run.model_type,
                                num_folds=num_folds)
 
         mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,

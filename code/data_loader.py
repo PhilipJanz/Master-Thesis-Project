@@ -52,6 +52,15 @@ def load_processed_features(feature_code):
     return pd.read_csv(PROCESSED_DATA_DIR / f"features/processed_designed_features_df_{feature_code}.csv", keep_default_na=False)
 
 
+def load_timeseries_features(feature_code=None):
+    with open(PROCESSED_DATA_DIR / f"features/processed_timeseries_features_{feature_code}.pkl", 'rb') as file:
+        timeseries_feature_data = pickle.load(file)
+        timeseries_feature_ndarray = timeseries_feature_data["data"]
+        feature_names = timeseries_feature_data["feature_name"]
+        data_id_df = timeseries_feature_data["data_id"]
+    return timeseries_feature_ndarray, feature_names, data_id_df
+
+
 def load_feature_selection(feature_selection_file=None):
     with open(FEATURE_SELECTION_DIR / f'{feature_selection_file}.pkl', 'rb') as file:
         feature_selection_dict = pickle.load(file)
