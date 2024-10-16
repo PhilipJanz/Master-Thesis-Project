@@ -1,7 +1,5 @@
 import os
 
-import shap
-from optuna.pruners import ThresholdPruner
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 #os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
@@ -11,6 +9,7 @@ from config import SEED, BASE_DIR
 
 import numpy as np
 import pandas as pd
+import shap
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import Model
 
@@ -19,6 +18,7 @@ from data_assembly import make_X, make_dummies
 from run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer_tf import OptunaOptimizerTF
 import optuna
+from optuna.pruners import ThresholdPruner
 import tensorflow as tf
 
 tf.random.set_seed(SEED)
@@ -52,13 +52,13 @@ date = "1510"
 # define objective (target)
 objective = "yield"
 
-# choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
+# choose data split for single models by choosing 'country', 'adm' or 'all' for no split
 data_split = "all"
 
 # processed feature code (feature len _ days before sos _ days before eos)
 feature_file = "32_60_60"
 
-# choose model or set of models that are used
+# choose model or set of models that are used. This script is for time-sensitive data: cnn & lstm
 model_type = "cnn"
 
 # number of principal components that are used to make soil-features (using PCA)
@@ -71,6 +71,8 @@ timeout = 7200
 n_trials = 200
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
+# choose a upper limit on loss (mse) for pruning an optuna trial (early stopping due to weak performance)
+pruner_upper_limit = .28
 # folds of optuna hyperparameter search
 num_folds = 5
 
@@ -87,7 +89,7 @@ timeseries_feature_ndarray, feature_names, data_id_df = load_timeseries_features
 assert np.all(data_id_df[["adm", "harv_year"]] == yield_df[["adm", "harv_year"]])
 
 # load soil characteristics
-soil_df = load_soil_pca_data(pc_number=2)
+soil_df = load_soil_pca_data(pc_number=soil_pc_number)
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
 run_name = f"{date}_{objective}_{data_split}_{model_type}_{feature_file}_optuna_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}"
@@ -165,7 +167,7 @@ for source_name, source_yield_df in source_yield_df_iter:
     X_static_ = X_static[:, ~non_source_ix]
     static_feature_names_ = static_feature_names[~non_source_ix]
     # X_ is used for prediction on all data including target
-    X_ = (X_static_, timeseries_feature_ndarray)
+    X_ = (X_static_, X_time)
 
     # LOYOCV - leave one year out cross validation
     for year_out in np.unique(years_source):
@@ -183,7 +185,7 @@ for source_name, source_yield_df in source_yield_df_iter:
         # hyperparameter-selection using optuna
         sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True,
                                              warn_independent_sampling=False, seed=SEED)
-        pruner = ThresholdPruner(upper=.28)
+        pruner = ThresholdPruner(upper=pruner_upper_limit)
         opti = OptunaOptimizerTF(study_name=f"{source_name}_{year_out}",
                                  X=X_train, y=y_train, years=years_train,
                                  sampler=sampler,
