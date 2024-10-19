@@ -21,8 +21,8 @@ COUNTRY_COLORS = {"Tanzania": TANZANIA_COLOR,
                   "Zambia": ZAMBIA_COLOR,
                   "Malawi": MALAWI_COLOR}
 COUNTRY_MARKERS = {"Tanzania": "o",
-                   "Zambia": "s",
-                   "Malawi": "v"}
+                   "Zambia": "v",
+                   "Malawi": "p"}
 
 
 # (area of interest) coordinates for a rectangular area: (min Lon, min Lat, max Lon, max Lat)

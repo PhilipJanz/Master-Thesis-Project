@@ -1,4 +1,10 @@
 import time
+
+import shap
+from optuna.pruners import ThresholdPruner
+
+from metrics import calc_r2
+
 wait_minutes = 180
 #for i in range(wait_minutes):
     #print(f"{wait_minutes - i} minutes until the script starts.........", end="\r")
@@ -44,7 +50,7 @@ There are two main loops:
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "1510"
+date = "1810"
 
 # define objective (target)
 objective = "yield"
@@ -56,8 +62,8 @@ data_split = "country"
 feature_file = "3_60_60"
 
 # feature selection file
-vif_threshold = None # 5
-fs_file = None # f"feature_selection_dir_{data_split}_vif{vif_threshold}_{feature_file}"
+vif_threshold = 5
+fs_file = f"feature_selection_dir_{data_split}_vif{vif_threshold}_{feature_file}"
 
 # choose model or set of models that are used
 model_type = "xgb"
@@ -72,8 +78,10 @@ timeout = 600
 n_trials = 250
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 100
+# choose a upper limit on loss (mse) for pruning an optuna trial (early stopping due to weak performance)
+pruner_upper_limit = .5
 # folds of optuna hyperparameter search
-num_folds = 5
+num_folds = 10
 
 
 # LOAD & PREPROCESS ####################################################################################################
@@ -170,10 +178,12 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
 
         # make feature-, model- and hyperparameter-selection using optuna
         sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True, warn_independent_sampling=False)
+        pruner = ThresholdPruner(upper=pruner_upper_limit)
         opti = OptunaOptimizer(study_name=f"{split_name}_{year_out}",
                                X=X_train, y=y_train, years=years_train,
                                sampler=sampler,
-                               model_types=run.model_type,
+                               pruner=pruner,
+                               model_type=run.model_type,
                                num_folds=num_folds)
 
         mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
@@ -183,25 +193,23 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
         # train best model
         trained_model = opti.train_best_model(X=X_train, y=y_train)
 
+        # estimate shap values
+        explainer = shap.DeepExplainer(trained_model, X_train)
+        shap_values = explainer.shap_values(X_test)
+
         # predict train- & test-data
         y_pred_train = trained_model.predict(X_train)
         y_pred_test = trained_model.predict(X_test)
 
         # write the predictions into the result df
         train_mse = np.mean((y_pred_train - y_train) ** 2)
-        if objective == "yield_anomaly":
-            train_nse = 1 - train_mse / np.mean(y_train ** 2)
-        else:
-            train_nse = 1 - train_mse / np.mean((y_train - np.mean(y_train)) ** 2)
+        train_nse = calc_r2(y_true=y_train, y_pred=y_pred_train)
         test_mse = np.mean((y_pred_test - y_test) ** 2)
         yield_df.loc[split_yield_df.index[year_out_bool], "train_mse"] = train_mse
         yield_df.loc[split_yield_df.index[year_out_bool], "train_nse"] = train_nse
         yield_df.loc[split_yield_df.index[year_out_bool], "test_mse"] = test_mse
         if len(y_test) > 3:
-            if objective == "yield_anomaly":
-                test_nse = 1 - test_mse / np.mean(y_test ** 2)
-            else:
-                test_nse = 1 - test_mse / np.mean((y_test - np.mean(y_test)) ** 2)
+            test_nse = calc_r2(y_true=y_test, y_pred=y_pred_test)
         else:
             test_nse = None
         yield_df.loc[split_yield_df.index[year_out_bool], "test_nse"] = test_nse
@@ -214,13 +222,6 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
 
         # save predictions and performance
         run.save_predictions(prediction_df=yield_df)
-
-
-    preds = yield_df.loc[split_yield_df.index]["y_pred"]
-    y_ = y[~preds.isna()]
-    preds_ = preds[~preds.isna()]
-    nse = 1 - np.nanmean((preds_ - y_) ** 2) / np.mean((y_ - np.mean(y_)) ** 2)
-    print(f"{split_name} finished with: NSE = {np.round(nse, 2)}")
 
     # break
     # np.nanmean((yield_df.loc[cluster_yield_df.index]["y_pred"] - yield_df.loc[cluster_yield_df.index]["yield_anomaly"]) ** 2)

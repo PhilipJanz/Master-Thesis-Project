@@ -21,8 +21,11 @@ def make_adm_column(df):
     return df
 
 
-def load_yield_data():
-    yield_df = pd.read_csv(PROCESSED_DATA_DIR / "yield/processed_comb_yield.csv", keep_default_na=False)
+def load_yield_data(benchmark_column=False):
+    if benchmark_column:
+        yield_df = pd.read_csv(PROCESSED_DATA_DIR / "yield/processed_comb_yield_and_benchmark.csv", keep_default_na=False)
+    else:
+        yield_df = pd.read_csv(PROCESSED_DATA_DIR / "yield/processed_comb_yield.csv", keep_default_na=False)
     yield_df = yield_df[(yield_df.harv_year >= harv_year_range[0]) & (yield_df.harv_year <= harv_year_range[1])].reset_index(drop=True)
     yield_df = make_adm_column(yield_df)
     yield_df["adm1_"] = yield_df["country"] + "_" + yield_df["adm1"]

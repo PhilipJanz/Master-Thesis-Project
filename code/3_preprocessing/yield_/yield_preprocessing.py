@@ -2,6 +2,7 @@ import numpy as np
 import statsmodels.api as sm
 
 from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
 
 from yield_.yield_functions import *
 

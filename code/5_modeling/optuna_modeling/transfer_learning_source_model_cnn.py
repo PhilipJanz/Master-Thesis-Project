@@ -15,6 +15,7 @@ from tensorflow.keras.models import Model
 
 from data_loader import load_yield_data, load_soil_pca_data, load_timeseries_features
 from data_assembly import make_X, make_dummies
+from metrics import calc_r2
 from run import list_of_runs, Run, open_run
 from optuna_modeling.optuna_optimizer_tf import OptunaOptimizerTF
 import optuna
@@ -47,7 +48,7 @@ There are two main loops:
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "1510"
+date = "1910"
 
 # define objective (target)
 objective = "yield"
@@ -59,14 +60,14 @@ data_split = "all"
 feature_file = "32_60_60"
 
 # choose model or set of models that are used. This script is for time-sensitive data: cnn & lstm
-model_type = "cnn"
+model_type = "lstm"
 
 # number of principal components that are used to make soil-features (using PCA)
 soil_pc_number = 2
 
 # optuna hyperparameter optimization params
 # choose timeout
-timeout = 7200
+timeout = 6 * 3600
 # choose duration (sec) of optimization using optuna
 n_trials = 200
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
@@ -146,8 +147,8 @@ else:
 
 for source_name, source_yield_df in source_yield_df_iter:
     #avg_var = np.mean(source_yield_df.groupby("adm")["yield"].var().values)
-    #if source_name == "Tanzania":
-    #    continue
+    if source_name == "Tanzania":
+        continue
 
     # in case you loaded an existing run, you can skip the clusters already predicted
     if np.all(~source_yield_df["y_pred"].isna()):
@@ -210,19 +211,13 @@ for source_name, source_yield_df in source_yield_df_iter:
 
         # write the predictions into the result df
         train_mse = np.mean((y_pred_train - y_train) ** 2)
-        if objective == "yield_anomaly":
-            train_nse = 1 - train_mse / np.mean(y_train ** 2)
-        else:
-            train_nse = 1 - train_mse / np.mean((y_train - np.mean(y_train)) ** 2)
+        train_nse = calc_r2(y_true=y_train, y_pred=y_pred_train)
         test_mse = np.mean((y_pred_test - y_test) ** 2)
         yield_df.loc[source_yield_df.index[year_out_bool], "train_mse"] = train_mse
         yield_df.loc[source_yield_df.index[year_out_bool], "train_nse"] = train_nse
         yield_df.loc[source_yield_df.index[year_out_bool], "test_mse"] = test_mse
         if len(y_test) > 3:
-            if objective == "yield_anomaly":
-                test_nse = 1 - test_mse / np.mean(y_test ** 2)
-            else:
-                test_nse = 1 - test_mse / np.mean((y_test - np.mean(y_test)) ** 2)
+            test_nse = calc_r2(y_true=y_test, y_pred=y_pred_test)
         else:
             test_nse = None
         yield_df.loc[source_yield_df.index[year_out_bool], "test_nse"] = test_nse
@@ -248,7 +243,7 @@ for source_name, source_yield_df in source_yield_df_iter:
         last_weights[0] *= 0
         last_weights[1] *= 0
         # for each unit set weight to 1 so the networks output is the output of that hidden unit
-        for i in range(best_params["dense_units"]):
+        for i in range(best_params["last_dense_units"]):
             last_weights[0] *= 0
             last_weights[0][i] = 1
             trained_model.layers[-1].set_weights(last_weights)
@@ -267,17 +262,6 @@ for source_name, source_yield_df in source_yield_df_iter:
 
         # save run
         run.save()
-
-
-    preds = yield_df.loc[source_yield_df.index]["y_pred"]
-    y_ = y_source[~preds.isna()]
-    preds_ = preds[~preds.isna()]
-
-    if objective == "yield_anomaly":
-        nse = 1 - np.mean((preds_ - y_) ** 2) / np.mean(y_ ** 2)
-    else:
-        nse = 1 - np.mean((preds_ - y_) ** 2) / np.mean((y_ - np.mean(y_)) ** 2)
-    print(f"{source_name} finished with: NSE = {np.round(nse, 2)}")
 
 
 # VISUALIZATION ########################################################################################################

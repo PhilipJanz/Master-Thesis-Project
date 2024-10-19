@@ -72,9 +72,10 @@ def create_cnn(t, f, s, trial=None, params=None):
 
     # Hidden layers with dropout
     if trial:
-        # Hyperparameter suggestions via trial
+        # Hyperparameter for static input
         static_dense_units = trial.suggest_categorical('static_dense_units', [4, 8, 16, 32, 64])
         static_dropout = trial.suggest_float('static_dropout', 0.0, 0.5)
+        # Fully connected layer on static
         static_dense_out = Dense(units=static_dense_units, activation="tanh")(static_input)
         static_dense_out = Dropout(rate=static_dropout)(static_dense_out)
 
@@ -155,41 +156,49 @@ def create_lstm(t, f, s, trial=None, params=None):
     # check if inputs are reasonable: xor on trial and params
     assert (not trial) ^ (not params), "Choose either params OR give an optuna trial (it's xor)"
 
+    # Sample params if in a trial or extract them if given
+    if trial:
+        # sample params:
+
+        # Hyperparameter for static input
+        static_dense_units = trial.suggest_categorical('static_dense_units', [4, 8, 16, 32, 64])
+        static_dropout = trial.suggest_float('static_dropout', 0.0, 0.5)
+
+        # Hyperparameter for LSTM
+        lstm_units = trial.suggest_categorical('lstm_units', [1, 2, 4, 8, 16, 32])
+        lstm_dropout = trial.suggest_float('lstm_dropout', 0.0, 0.5)
+
+        # last fully connected layer (feature layer)
+        last_dense_units = trial.suggest_categorical(f'last_dense_units', [4, 8, 16, 32])
+    else:
+        # collect params
+        static_dense_units = params[f'static_dense_units']
+        static_dropout = params[f'static_dropout']
+        lstm_units = params[f'lstm_units']
+        lstm_dropout = params[f'lstm_dropout']
+        last_dense_units = params[f'last_dense_units']
+
+
     # Define input shapes
     time_sensitive_input = Input(shape=(t, f), name='time_sensitive_input')
     static_input = Input(shape=(s,), name='static_input')
 
-    # Hidden layers with dropout
-    if trial:
-        # dropout after input
-        input_dropout = trial.suggest_float(f'input_dropout', 0.0, 0.5)
-        time_sensitive_input = Dropout(rate=input_dropout)(time_sensitive_input)
-        static_input = Dropout(rate=input_dropout)(static_input)
+    # Fully connected layer on static input
+    static_dense_out = Dense(units=static_dense_units, activation="tanh")(static_input)
+    static_dense_out = Dropout(rate=static_dropout)(static_dense_out)
 
-        # LSTM layer for time-sensitive data
-        lstm_out = LSTM(units=trial.suggest_categorical('lstm_units', [2, 4, 8, 16, 32]),
-                        return_sequences=False)(time_sensitive_input)
-        lstm_out = Dropout(rate=trial.suggest_float(f'lstm_dropout', 0.0, 0.9))(lstm_out)
+    # LSTM layers for time-sensitive data
+    lstm_out = LSTM(units=lstm_units, return_sequences=True)(time_sensitive_input)
+    lstm_out = Dropout(rate=lstm_dropout)(lstm_out)
+    lstm_out = LSTM(units=lstm_units, return_sequences=True)(lstm_out)
+    lstm_out = Dropout(rate=lstm_dropout)(lstm_out)
+    lstm_out = LSTM(units=lstm_units)(lstm_out)
+    lstm_out = Dropout(rate=lstm_dropout)(lstm_out)
 
-        # Concatenate with static data
-        merged = concatenate([static_input, lstm_out])
-        # init last hidden layer
-        dense_out = Dense(units=trial.suggest_categorical(f'dense_units', [4, 8, 16, 32]), activation='tanh')(merged)
-    else:
-        # dropout after input
-        input_dropout = params[f'input_dropout']
-        time_sensitive_input = Dropout(rate=input_dropout)(time_sensitive_input)
-        static_input = Dropout(rate=input_dropout)(static_input)
-
-        # LSTM layer for time-sensitive data
-        lstm_out = LSTM(units=params[f'lstm_units'],
-                        return_sequences=False)(time_sensitive_input)
-        lstm_out = Dropout(rate=params[f'lstm_dropout'])(lstm_out)
-
-        # Concatenate with static data
-        merged = concatenate([static_input, lstm_out])
-        # init last hidden layer
-        dense_out = Dense(units=params[f'dense_units'], activation='tanh')(merged)
+    # Concatenate with static data
+    merged = concatenate([static_dense_out, lstm_out])
+    # init last hidden layer
+    dense_out = Dense(units=last_dense_units, activation='tanh')(merged)
 
     # Output layer (regression example)
     output = Dense(units=1, activation='linear')(dense_out)
@@ -209,7 +218,7 @@ def init_model(X, model_name, trial=None, params=None):
     if model_name == 'nn':
         if trial:
             params = {
-                "epochs": trial.suggest_int('epochs', 100, 1000),
+                "epochs": trial.suggest_int('epochs', 500, 2000),
                 "batch_size": trial.suggest_int('batch_size', 50, 500)
             }
             return create_nn(c=X.shape[1], trial=trial), params
@@ -233,7 +242,7 @@ def init_model(X, model_name, trial=None, params=None):
         _, t, f = X_time.shape
         if trial:
             params = {
-                "epochs": trial.suggest_int('epochs', 200, 2000),
+                "epochs": trial.suggest_int('epochs', 100, 1000),
                 "batch_size": trial.suggest_int('batch_size', 50, 500)
             }
             return create_lstm(t=t, f=f, s=s, trial=trial), params

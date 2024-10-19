@@ -8,7 +8,7 @@ from maps.map_functions import load_aoi_map, load_africa_map
 import seaborn as sns
 
 
-def plot_performance_map(performance_data, performance_column, result_filename):
+def plot_performance_map(performance_data, performance_column, result_filename, cmap="RdYlBu"):
     # load country-based map for better understanding for country borders
     africa_map = load_africa_map()
     # load map for areas of interest
@@ -24,8 +24,7 @@ def plot_performance_map(performance_data, performance_column, result_filename):
     # Plot country maps as background
     africa_map[africa_map.NAME.isin(geo_performance_data["country"].unique())].plot(color="#e6e6e6", edgecolor="white", linewidth=2, ax=ax)
 
-    # Plot NSE
-    cmap = "RdYlGn"
+    # Plot
     geo_performance_data.plot(column=performance_column, cmap=cmap, vmin=-1, vmax=1, edgecolor='white', linewidth=0.3, ax=ax, alpha=0.8)
 
     # Add colorbar
@@ -44,9 +43,9 @@ def plot_performance_map(performance_data, performance_column, result_filename):
     plt.title(result_filename)
 
     # Save the plot
-    plt.savefig(RESULTS_DATA_DIR / f"yield_predictions/{result_filename}/plots/overall/nse_map.jpg", dpi=1200)
+    plt.savefig(RESULTS_DATA_DIR / f"yield_predictions/{result_filename}/plots/overall/{performance_column}_map.pdf", format="pdf")
 
-    plt.show()
+    plt.close()
 
 
 def plot_map(df, column, title, cmap="viridis", cmap_range=None, save_path=None):

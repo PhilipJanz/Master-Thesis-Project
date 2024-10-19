@@ -237,7 +237,10 @@ for run_name in os.listdir(pred_result_dir):
         if objective == "yield_anomaly":
             nse = 1 - mse / np.mean(y_true ** 2)
         else:
-            nse = 1 - mse / np.mean((y_true - np.mean(y_true)) ** 2)
+            mean_estimator = []
+            for i in y_true.index:
+                mean_estimator.append(np.mean(y_true.drop(i)))
+            nse = 1 - mse / np.mean((y_true - mean_estimator) ** 2)
 
         # fill dict
         performance_dict["adm"].append(adm)
