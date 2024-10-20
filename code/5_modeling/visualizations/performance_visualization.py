@@ -22,7 +22,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '1810_yield_country_transfer_features_from_all_xgb_600_250_100_10'
+run_name = '1010_yield_country_xgb_3_60_60_optuna_600_250_100_5_vif5'
 #run = open_run(run_name=run_name)
 #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
 #for i, (name, model) in enumerate(model_dir.items()):
@@ -68,6 +68,7 @@ for adm, adm_results_df in prediction_df.groupby("adm"):
     performance_dict["rmse"].append(rmse)
     performance_dict["r2"].append(r2)
     performance_dict["brr2"].append(brr2)
+    """
     if "Chipata" in adm: # Chipata pwani
         fig, ax = plt.subplots()
         ax.plot(adm_results_df["harv_year"], y_true, label="True Yield")
@@ -75,9 +76,9 @@ for adm, adm_results_df in prediction_df.groupby("adm"):
         ax.plot(adm_results_df["harv_year"], adm_results_df["y_pred"], label="Model Prediction")
         ax.text(0.9, 0.05, f"R2: {np.round(r2, 2)}\nBR-R2: {np.round(brr2, 2)}", transform=ax.transAxes, verticalalignment='bottom', horizontalalignment='left')
         plt.legend()
-        plt.show()
+        plt.show()"""
 
-
+"""
 fig, ax = plt.subplots(1, 2, figsize=(12, 3))
 ax1, ax2 = ax
 adm_results_df = prediction_df[prediction_df.adm2 == "Dedza"]
@@ -106,7 +107,7 @@ ax2.text(0.7, 0.05, f"R2: {np.round(r2, 2)}\nBR-R2: {np.round(brr2, 2)}", transf
 
 plt.legend()
 plt.savefig("br_r2_motivation.pdf", format="pdf") # TODO path
-plt.show()
+plt.show()"""
 
 performance_df = pd.DataFrame(performance_dict)
 
@@ -116,7 +117,7 @@ plot_performance_map(performance_data=performance_df.drop("country", axis=1), pe
 
 
 for c, country_df in performance_df.groupby("country"):
-    plt.scatter(country_df["n"], country_df["nse"], color="grey", alpha=0.7, marker=COUNTRY_MARKERS[c], label=c)
+    plt.scatter(country_df["n"], country_df["r2"], color="grey", alpha=0.7, marker=COUNTRY_MARKERS[c], label=c)
 plt.xlabel("Number of data points in region")
 plt.ylabel("NSE")
 plt.legend()

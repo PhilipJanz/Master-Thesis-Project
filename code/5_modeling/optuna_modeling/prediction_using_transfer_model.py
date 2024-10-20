@@ -47,30 +47,30 @@ There are two main loops:
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "1910"
+date = "1810"
 
 # define objective (target)
 objective = "yield"
 
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
-data_split = "adm"
+data_split = "country"
 
 # source model
 source_run_name = "1510_yield_all_cnn_32_60_60_optuna_7200_200_50_5"
 source_name = "all"
 
 # predictive model
-model_type = "gp"
+model_type = "xgb"
 
 # optuna hyperparameter optimization params
 # choose timeout
 timeout = 600
 # choose duration (sec) of optimization using optuna
-n_trials = 500
+n_trials = 250
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
-n_startup_trials = 200
+n_startup_trials = 100
 # choose a upper limit on loss (mse) for pruning an optuna trial (early stopping due to weak performance)
-pruner_upper_limit = 2
+pruner_upper_limit = 1
 # folds of optuna hyperparameter search
 num_folds = 10
 

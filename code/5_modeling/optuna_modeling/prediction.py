@@ -50,7 +50,7 @@ There are two main loops:
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "1810"
+date = "1010"
 
 # define objective (target)
 objective = "yield"
@@ -81,7 +81,7 @@ n_startup_trials = 100
 # choose a upper limit on loss (mse) for pruning an optuna trial (early stopping due to weak performance)
 pruner_upper_limit = .5
 # folds of optuna hyperparameter search
-num_folds = 10
+num_folds = 5
 
 
 # LOAD & PREPROCESS ####################################################################################################
@@ -169,6 +169,7 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
         if vif_threshold:
             selected_features = feature_selection_dict[split_name][year_out]
             drop_features = [feature for feature in processed_feature_df.columns if feature not in selected_features]
+            remaining_features = [feature for feature in feature_names if feature not in drop_features]
             X_sel = X[:, [feature not in drop_features for feature in feature_names]]
         else:
             X_sel = X.copy()
@@ -191,12 +192,20 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
         run.save_optuna_study(study=opti.study)
 
         # train best model
-        trained_model = opti.train_best_model(X=X_train, y=y_train)
+        trained_model = opti.train_best_model()
 
         # estimate shap values
-        explainer = shap.DeepExplainer(trained_model, X_train)
+        if model_type == "xgb":
+            explainer = shap.TreeExplainer(trained_model, X_train)
+        else:
+            explainer = shap.Explainer(trained_model, X_train)
         shap_values = explainer.shap_values(X_test)
-
+        if vif_threshold:
+            X_train_ = pd.DataFrame(X_train, columns=remaining_features)
+        else:
+            X_train_ = pd.DataFrame(X_train, columns=feature_names)
+        #shap.plots.beeswarm(explainer(X_train_), max_display=20)
+        #assert False
         # predict train- & test-data
         y_pred_train = trained_model.predict(X_train)
         y_pred_test = trained_model.predict(X_test)

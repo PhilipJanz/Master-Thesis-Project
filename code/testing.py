@@ -184,6 +184,7 @@ nse = 1 - np.nanmean((preds_ - y_) ** 2) / np.mean(y_ ** 2)
 print(f"{cluster_name} finished with: NSE = {np.round(nse, 2)}")
 
 
+##################################################################
 
 import os
 
@@ -261,3 +262,26 @@ overview_df = pd.DataFrame({"run": run_name_ls, "rmse": rmse_ls, "avg_nse": avg_
                             "n_adm": n_adm_ls,
                             "num_nse_above0": num_nse_above0_ls,
                             "num_nse_above03": num_nse_above03_ls})
+
+##################################################################
+
+xy = split_yield_df[year_out_bool]
+np.where(xy.adm1 == "Shinyanga")[-1][-1]
+shap.plots.waterfall(explainer(X_test_)[20], max_display=10)
+X_test_ = pd.DataFrame(X_test, columns=remaining_features)
+xyc = yield_df[yield_df.adm1 == "Shinyanga"]
+
+# Create the plot
+fig, ax = plt.subplots()
+
+# Hide the top and right spines (outline)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+plt.plot(xyc["harv_year"], xyc["yield"], color="grey", label="True Yield")
+plt.plot(xyc["harv_year"], xyc["y_pred"], color="tab:orange", label="Yield Prediction")
+plt.legend()
+plt.ylabel("Yield (T/ha)")
+ax.grid(True, which='major', linestyle='--', linewidth=0.5, color='gray', alpha=0.3)  # Enable the grid
+
+#plt.savefig("example_predicion.svg")
+plt.show()

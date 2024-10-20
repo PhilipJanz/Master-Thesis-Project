@@ -48,7 +48,7 @@ There are two main loops:
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "1910"
+date = "1810"
 
 # define objective (target)
 objective = "yield"
@@ -67,7 +67,7 @@ soil_pc_number = 2
 
 # optuna hyperparameter optimization params
 # choose timeout
-timeout = 6 * 3600
+timeout = 3 * 3600
 # choose duration (sec) of optimization using optuna
 n_trials = 200
 # choose number of optuna startup trails (random parameter search before sampler gets activated)

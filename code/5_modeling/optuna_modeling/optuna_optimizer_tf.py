@@ -66,18 +66,11 @@ def create_cnn(t, f, s, trial=None, params=None):
     # Check if inputs are reasonable: XOR on trial and params
     assert (trial is not None) ^ (params is not None), "Choose either params OR give an Optuna trial (it's xor)"
 
-    # Define input shapes
-    time_sensitive_input = Input(shape=(t, f), name='time_sensitive_input')
-    static_input = Input(shape=(s,), name='static_input')
-
     # Hidden layers with dropout
     if trial:
         # Hyperparameter for static input
         static_dense_units = trial.suggest_categorical('static_dense_units', [4, 8, 16, 32, 64])
         static_dropout = trial.suggest_float('static_dropout', 0.0, 0.5)
-        # Fully connected layer on static
-        static_dense_out = Dense(units=static_dense_units, activation="tanh")(static_input)
-        static_dense_out = Dropout(rate=static_dropout)(static_dense_out)
 
         # Convolutional layer hyperparameters
         num_conv_layers = trial.suggest_int('num_conv_layers', 1, 5)
@@ -86,25 +79,12 @@ def create_cnn(t, f, s, trial=None, params=None):
         kernel_size = trial.suggest_int('kernel_size', 2, np.min([16, max_kernel_size]))
         conv_dropout = trial.suggest_float('conv_dropout', 0.0, 0.5)
 
-        # Build convolutional layers
-        x = time_sensitive_input
-        for i in range(num_conv_layers):
-            x = Conv1D(filters=conv_filters,
-                       kernel_size=kernel_size,
-                       activation="relu",
-                       padding='valid')(x)
-            x = Dropout(rate=conv_dropout)(x)
-
-        x = Flatten()(x)
-
         # Dense layer hyperparameters
         dense_units = trial.suggest_categorical('dense_units', [4, 8, 16, 32, 64])
     else:
         # Hyperparameter suggestions via trial
         static_dense_units = params['static_dense_units']
         static_dropout = params['static_dropout']
-        static_dense_out = Dense(units=static_dense_units, activation="tanh")(static_input)
-        static_dense_out = Dropout(rate=static_dropout)(static_dense_out)
 
         # Convolutional layer hyperparameters
         num_conv_layers = params['num_conv_layers']
@@ -112,19 +92,28 @@ def create_cnn(t, f, s, trial=None, params=None):
         kernel_size = params['kernel_size']
         conv_dropout = params['conv_dropout']
 
-        # Build convolutional layers
-        x = time_sensitive_input
-        for i in range(num_conv_layers):
-            x = Conv1D(filters=conv_filters,
-                       kernel_size=kernel_size,
-                       activation="relu",
-                       padding='valid')(x)
-            x = Dropout(rate=conv_dropout)(x)
-
-        x = Flatten()(x)
-
         # Dense layer hyperparameters
         dense_units = params['dense_units']
+
+
+    # Define input shapes
+    time_sensitive_input = Input(shape=(t, f), name='time_sensitive_input')
+    static_input = Input(shape=(s,), name='static_input')
+
+    # Fully connected layer on static
+    static_dense_out = Dense(units=static_dense_units, activation="tanh")(static_input)
+    static_dense_out = Dropout(rate=static_dropout)(static_dense_out)
+
+    # Build convolutional layers
+    x = time_sensitive_input
+    for i in range(num_conv_layers):
+        x = Conv1D(filters=conv_filters,
+                   kernel_size=kernel_size,
+                   activation="relu",
+                   padding='valid')(x)
+        x = Dropout(rate=conv_dropout)(x)
+
+    x = Flatten()(x)
 
     # Concatenate with static data
     merged = concatenate([static_dense_out, x])
@@ -161,22 +150,24 @@ def create_lstm(t, f, s, trial=None, params=None):
         # sample params:
 
         # Hyperparameter for static input
-        static_dense_units = trial.suggest_categorical('static_dense_units', [4, 8, 16, 32, 64])
+        static_dense_units = 32 # trial.suggest_categorical('static_dense_units', [4, 8, 16, 32, 64])
         static_dropout = trial.suggest_float('static_dropout', 0.0, 0.5)
 
         # Hyperparameter for LSTM
-        lstm_units = trial.suggest_categorical('lstm_units', [1, 2, 4, 8, 16, 32])
+        lstm_units = 2 # trial.suggest_categorical('lstm_units', [1, 2, 4, 8, 16, 32])
         lstm_dropout = trial.suggest_float('lstm_dropout', 0.0, 0.5)
 
         # last fully connected layer (feature layer)
-        last_dense_units = trial.suggest_categorical(f'last_dense_units', [4, 8, 16, 32])
+        last_dense_units = 32 # trial.suggest_categorical(f'last_dense_units', [4, 8, 16, 32])
+        last_dropout = trial.suggest_float('last_dropout', 0.0, 0.5)
     else:
         # collect params
-        static_dense_units = params[f'static_dense_units']
+        static_dense_units = 32 # params[f'static_dense_units']
         static_dropout = params[f'static_dropout']
-        lstm_units = params[f'lstm_units']
+        lstm_units = 2 # params[f'lstm_units']
         lstm_dropout = params[f'lstm_dropout']
-        last_dense_units = params[f'last_dense_units']
+        last_dense_units = 32 # params[f'last_dense_units']
+        last_dropout =  params['last_dropout']
 
 
     # Define input shapes
@@ -199,6 +190,9 @@ def create_lstm(t, f, s, trial=None, params=None):
     merged = concatenate([static_dense_out, lstm_out])
     # init last hidden layer
     dense_out = Dense(units=last_dense_units, activation='tanh')(merged)
+    dense_out = Dropout(rate=last_dropout)(dense_out)
+    dense_out = Dense(units=last_dense_units, activation='tanh')(dense_out)
+    dense_out = Dropout(rate=last_dropout)(dense_out)
 
     # Output layer (regression example)
     output = Dense(units=1, activation='linear')(dense_out)
@@ -242,8 +236,8 @@ def init_model(X, model_name, trial=None, params=None):
         _, t, f = X_time.shape
         if trial:
             params = {
-                "epochs": trial.suggest_int('epochs', 100, 1000),
-                "batch_size": trial.suggest_int('batch_size', 50, 500)
+                "epochs": 500, # trial.suggest_int('epochs', 100, 1000),
+                "batch_size": 500 #trial.suggest_int('batch_size', 50, 500)
             }
             return create_lstm(t=t, f=f, s=s, trial=trial), params
         else:
