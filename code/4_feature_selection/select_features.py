@@ -13,7 +13,7 @@ from data_loader import load_yield_data
 # INITIALIZATION ###############
 
 # indicator for feature file name given preprocessing specifications (see process_designed_features.py)
-feature_file_name = "1_60_60"
+feature_file_name = "3_60_60"
 
 # geographic scale of FS (country, adm, ...)
 data_split = "country"

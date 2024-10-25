@@ -1,4 +1,5 @@
 from optuna import TrialPruned
+from optuna.trial import TrialState
 
 from config import SEED
 from copy import deepcopy
@@ -170,7 +171,7 @@ def init_model(model_name, trial=None, params=None):
                             ["max_depth", "learning_rate", "subsample", 'colsample_bytree', 'gamma', "alpha"]}
         model_params["lambda"] = 0
         model_params["n_estimators"] = 300
-        return XGBRegressor(**model_params, random_state=SEED), model_params
+        return XGBRegressor(**model_params, random_state=SEED, importance_type="gain"), model_params
     else:
         raise AssertionError(f"Model name '{model_name}' is not in: ['svr', 'rf', 'lasso', 'nn', 'lstm']")
 
@@ -275,6 +276,9 @@ class OptunaOptimizer:
         self.study.optimize(self.objective, n_trials=n_trials, timeout=timeout,
                             n_jobs=n_jobs, show_progress_bar=show_progress_bar,
                             gc_after_trial=True)
+
+        if np.all([trial.state == TrialState.PRUNED for trial in self.study.trials]):
+            return None, None
 
         self.best_mse, self.best_params = self.study.best_trial.value, self.study.best_trial.params
 

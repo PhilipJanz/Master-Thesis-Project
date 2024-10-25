@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from matplotlib import gridspec
 
 from config import FEATURE_SELECTION_DIR
 from data_loader import load_feature_selection, load_processed_features

@@ -22,7 +22,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '1010_yield_country_xgb_3_60_60_optuna_600_250_100_5_vif5'
+run_name = '2110_yield_country_xgb_3_60_60_optuna_600_250_100_5_vif5'
 #run = open_run(run_name=run_name)
 #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
 #for i, (name, model) in enumerate(model_dir.items()):
@@ -81,7 +81,7 @@ for adm, adm_results_df in prediction_df.groupby("adm"):
 """
 fig, ax = plt.subplots(1, 2, figsize=(12, 3))
 ax1, ax2 = ax
-adm_results_df = prediction_df[prediction_df.adm2 == "Dedza"]
+adm_results_df = prediction_df[prediction_df.adm2 == "Ruvuma"]
 y_true = adm_results_df[objective]
 rmse = calc_rmse(y_true=y_true, y_pred=adm_results_df["y_pred"])
 r2 = calc_r2(y_true=y_true, y_pred=adm_results_df["y_pred"])

@@ -4,9 +4,9 @@ from matplotlib import pyplot as plt
 from scipy.stats import gamma, norm
 
 from crop_calendar.profile_generation import make_profiles, get_day_of_year
+import statsmodels.api as sm
 
-
-def generate_si(folder_path, file_name, si_file_name, gaussian_rolling_averge_window_size=None, distibution="gaussian"):
+def generate_si(folder_path, file_name, si_file_name, gaussian_rolling_averge_window_size=None, distibution="gaussian", trend_cleaning=True):
     """
 
     :param gaussian_rolling_averge_window_size: (optional) applies rolling average. Especially interesting for
@@ -24,6 +24,8 @@ def generate_si(folder_path, file_name, si_file_name, gaussian_rolling_averge_wi
     # create ni dataframe to be filled with ni values in a loop over the rows
     si_2darray = np.zeros((len(data_df), len(value_columns)))
 
+    trend_ls = []
+    p_value_ls = []
     for i, row in data_df.iterrows():
         print(f"Processing {si_file_name} ({i + 1}/{len(data_df)})", end='\r')
         values = row[value_columns].values
@@ -41,6 +43,17 @@ def generate_si(folder_path, file_name, si_file_name, gaussian_rolling_averge_wi
                                                min_periods=1,
                                                center=True).mean(std=gaussian_rolling_averge_window_size/3)
         values = np.array(values)
+
+        if trend_cleaning:
+            # test on linear trends (like climate change)
+            X = sm.add_constant(np.arange(len(values)))
+            model = sm.OLS(values, X).fit()
+            p_value = model.pvalues[1]
+            p_value_ls.append(p_value)
+            trend_ls.append(model.params[1])
+            # clean trend if significant
+            if p_value < .05:
+                values = values - model.predict(X)
 
         # calculate the stnd. dev. for each doy individually (its very different across the year)
         for doy in doy_ls:
@@ -72,6 +85,10 @@ def generate_si(folder_path, file_name, si_file_name, gaussian_rolling_averge_wi
                 raise AssertionError(f"Unexpected probability distribution input: {distibution}")
 
             si_2darray[i, doy_ix_ls] = si_values
+
+    # report on trend detection:
+    print(f"Found {np.sum(np.array(p_value_ls) < .05)}/{len(p_value_ls)} time series with significant trend. ({np.sum(np.array(trend_ls)[np.array(p_value_ls) < .05] > 0)} times positive trend)")
+    print(f"Averge trend: {np.mean(trend_ls)}")
 
     # fill into dataframe
     si_df = data_df.copy()

@@ -56,6 +56,8 @@ class Run:
         os.mkdir(run_dir / "models")
         os.mkdir(run_dir / "params")
         os.mkdir(run_dir / "optuna_studies")
+        os.mkdir(run_dir / "shap")
+        os.mkdir(run_dir / "feature_importance")
         os.mkdir(run_dir / "plots")
         os.mkdir(run_dir / "plots/regional")
         os.mkdir(run_dir / "plots/overall")
@@ -207,7 +209,9 @@ class Run:
             pickle.dump(explainer, f, pickle.HIGHEST_PROTOCOL)
 
         # save the shap values
-        shap_data.to_csv(self.run_dir / f"shap/{name}_shap.pkl", index=False)
+        with open(self.run_dir / f"shap/{name}_shap_data.pkl", 'wb') as f:
+            # Pickle using the highest protocol available.
+            pickle.dump(shap_data, f, pickle.HIGHEST_PROTOCOL)
 
     def save_model_and_params(self, name, model, params):
         # save params dict

@@ -153,6 +153,6 @@ plot_region_map(region_map=comb_map, save_path=PROCESSED_DATA_DIR / "admin map/p
 comb_map.to_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp", index=False)
 
 # plot number of yield datapoints
-yield_count_df = yield_df.groupby("adm")["country"].count().reset_index(name="count")
-plot_map(df=yield_count_df, column="count", title="Number of yield datapoint after filtering", cmap="YlGn",
-         cmap_range=(0, 25), save_path=PROCESSED_DATA_DIR / "admin map/plots/yield_data_count.jpg")
+yield_count_df = yield_df.groupby("adm")["country"].count().reset_index(name="Number of datapoints")
+plot_map(df=yield_count_df, column="Number of datapoints", cmap="YlGn",
+         cmap_range=(0, 25), country_annotation=True, save_path=PROCESSED_DATA_DIR / "admin map/plots/yield_data_count.png")

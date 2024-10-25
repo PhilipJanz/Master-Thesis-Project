@@ -13,7 +13,7 @@ This script processes features based on feature design.
 # INITIALIZATION  ####################################################################################################
 
 # length of timeseries of remotes sensing and meteorological features
-ts_length = 3
+ts_length = 9
 
 # move the time-window for inference based on the crop calendar (in days)
 start_before_sos = 60

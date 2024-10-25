@@ -18,13 +18,15 @@ generate_si(folder_path=PROCESSED_DATA_DIR / "climate/",
             file_name="preci_regional_matrix.csv",
             si_file_name="../../../data/processed/climate/spi1_regional_matrix.csv",
             gaussian_rolling_averge_window_size=30,
-            distibution="gamma"
+            distibution="gamma",
+            trend_cleaning=False
             )
 generate_si(folder_path=PROCESSED_DATA_DIR / "climate/",
             file_name="preci_regional_matrix.csv",
             si_file_name="../../../data/processed/climate/spi6_regional_matrix.csv",
             gaussian_rolling_averge_window_size=180,
-            distibution="gamma"
+            distibution="gamma",
+            trend_cleaning=False
             )
 generate_si(folder_path=PROCESSED_DATA_DIR / "climate/",
             file_name="temp_regional_matrix.csv",

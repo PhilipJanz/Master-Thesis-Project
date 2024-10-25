@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 opti_alpha = np.exp(np.mean(np.log(best_alphas))) # np.median(best_alphas) # opti.best_params["alpha"]
 alphas = np.exp(np.arange(-20.8, 0, 0.2))
 
@@ -191,6 +192,7 @@ import os
 import numpy as np
 import pandas as pd
 
+from metrics import calc_rmse, calc_r2, calc_brr2
 from config import RESULTS_DATA_DIR
 
 """
@@ -207,10 +209,10 @@ print(os.listdir(pred_result_dir))
 
 run_name_ls = []
 rmse_ls = []
-avg_nse_ls = []
+avg_r2_ls = []
 n_adm_ls = []
-num_nse_above0_ls = []
-num_nse_above03_ls = []
+num_r2_above0_ls = []
+num_r2_above03_ls = []
 for run_name in os.listdir(pred_result_dir):
     if run_name in ["old", "yield"]:
         continue
@@ -230,38 +232,35 @@ for run_name in os.listdir(pred_result_dir):
     result_df = yield_df[yield_df["y_pred"] != ""]
     result_df["y_pred"] = pd.to_numeric(result_df["y_pred"])
 
-    performance_dict = {"adm": [], "mse": [], "nse": []}
+    performance_dict = {"adm": [], "rmse": [], "r2": []}
     for adm, adm_results_df in result_df.groupby("adm"):
         y_true = adm_results_df[objective]
-        mse = np.mean((adm_results_df["y_pred"] - adm_results_df[objective]) ** 2)
 
-        if objective == "yield_anomaly":
-            nse = 1 - mse / np.mean(y_true ** 2)
-        else:
-            mean_estimator = []
-            for i in y_true.index:
-                mean_estimator.append(np.mean(y_true.drop(i)))
-            nse = 1 - mse / np.mean((y_true - mean_estimator) ** 2)
+        rmse = calc_rmse(y_true=y_true, y_pred=adm_results_df["y_pred"])
+
+        r2 = calc_r2(y_true=y_true, y_pred=adm_results_df["y_pred"])
+        #brr2 = calc_brr2(y_true=y_true, y_pred=adm_results_df["y_pred"], y_benchmark=)
 
         # fill dict
         performance_dict["adm"].append(adm)
-        performance_dict["mse"].append(mse)
-        performance_dict["nse"].append(nse)
+        performance_dict["rmse"].append(rmse)
+        performance_dict["r2"].append(r2)
+        #performance_dict["brr2"].append(brr2)
 
     performance_df = pd.DataFrame(performance_dict)
 
     run_name_ls.append(run_name)
     rmse_ls.append(np.sqrt(np.mean((result_df["y_pred"] - result_df[objective]) ** 2)))
-    avg_nse_ls.append(np.mean(performance_df["nse"]))
+    avg_r2_ls.append(np.mean(performance_df["r2"]))
     n_adm_ls.append(len(performance_df))
-    num_nse_above0_ls.append(np.sum(performance_df["nse"] > 0))
-    num_nse_above03_ls.append(np.sum(performance_df["nse"] > 0.3))
+    num_r2_above0_ls.append(np.sum(performance_df["r2"] > 0))
+    num_r2_above03_ls.append(np.sum(performance_df["r2"] > 0.3))
 
 pd.set_option('display.max_columns', None)
-overview_df = pd.DataFrame({"run": run_name_ls, "rmse": rmse_ls, "avg_nse": avg_nse_ls,
+overview_df = pd.DataFrame({"run": run_name_ls, "rmse": rmse_ls, "avg_r2": avg_r2_ls,
                             "n_adm": n_adm_ls,
-                            "num_nse_above0": num_nse_above0_ls,
-                            "num_nse_above03": num_nse_above03_ls})
+                            "num_r2_above0": num_r2_above0_ls,
+                            "num_r2_above03": num_r2_above03_ls})
 
 ##################################################################
 

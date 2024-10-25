@@ -2,7 +2,7 @@ import time
 
 import shap
 from optuna.pruners import ThresholdPruner
-
+import xgboost as xgb
 from metrics import calc_r2
 
 wait_minutes = 180
@@ -50,13 +50,13 @@ There are two main loops:
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "1010"
+date = "2110"
 
 # define objective (target)
 objective = "yield"
 
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
-data_split = "country"
+data_split = "adm"
 
 # processed feature code (feature len _ days before sos _ days before eos)
 feature_file = "3_60_60"
@@ -87,7 +87,7 @@ num_folds = 5
 # LOAD & PREPROCESS ####################################################################################################
 
 # load yield data and benchmark
-yield_df = load_yield_data()
+yield_df = load_yield_data(benchmark_column=True)
 
 # load and process features
 processed_feature_df = load_processed_features(feature_file)
@@ -172,6 +172,7 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
             remaining_features = [feature for feature in feature_names if feature not in drop_features]
             X_sel = X[:, [feature not in drop_features for feature in feature_names]]
         else:
+            remaining_features = feature_names.tolist()
             X_sel = X.copy()
 
         X_train, y_train, years_train = X_sel[~year_out_bool], y[~year_out_bool], years[~year_out_bool]
@@ -191,24 +192,35 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
                                          show_progress_bar=True, print_result=False)
         run.save_optuna_study(study=opti.study)
 
-        # train best model
-        trained_model = opti.train_best_model()
+        # if best_params is None it means that optuna pruned every single trail, which means the model performs exceptionally bad
+        if best_params:
+            # train best model
+            trained_model = opti.train_best_model()
 
-        # estimate shap values
-        if model_type == "xgb":
-            explainer = shap.TreeExplainer(trained_model, X_train)
+            # estimate shap values
+            if model_type == "xgb":
+                explainer = shap.TreeExplainer(trained_model, X_train)
+            else:
+                explainer = shap.Explainer(trained_model, X_train)
+            shap_data = explainer(X_test)
+            shap_data.feature_names = remaining_features
+
+            # save shapley values
+            run.save_shap(name=f"{split_name}_{year_out}", explainer=explainer, shap_data=shap_data)
+
+            # save feature importance
+            if model_type == "xgb":
+                feature_importance_dict = {}
+                for importance, feature_name in zip(trained_model.feature_importances_, remaining_features):
+                    feature_importance_dict[feature_name] = importance
+                pd.DataFrame(feature_importance_dict, index=[0]).to_csv(run.run_dir / f"feature_importance/{split_name}_{year_out}.csv")
+
+            # predict train- & test-data
+            y_pred_train = trained_model.predict(X_train)
+            y_pred_test = trained_model.predict(X_test)
         else:
-            explainer = shap.Explainer(trained_model, X_train)
-        shap_values = explainer.shap_values(X_test)
-        if vif_threshold:
-            X_train_ = pd.DataFrame(X_train, columns=remaining_features)
-        else:
-            X_train_ = pd.DataFrame(X_train, columns=feature_names)
-        #shap.plots.beeswarm(explainer(X_train_), max_display=20)
-        #assert False
-        # predict train- & test-data
-        y_pred_train = trained_model.predict(X_train)
-        y_pred_test = trained_model.predict(X_test)
+            y_pred_train = split_yield_df["y_bench"][~year_out_bool].values
+            y_pred_test = split_yield_df["y_bench"][year_out_bool].values
 
         # write the predictions into the result df
         train_mse = np.mean((y_pred_train - y_train) ** 2)

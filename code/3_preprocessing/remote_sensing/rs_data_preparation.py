@@ -74,18 +74,20 @@ for date, ndvi_image_filename in zip(date_list, ndvi_image_filename_list):
         transform = rs_src.transform
         crs = rs_src.crs
 
+    mean_value_ls = []
+    quality_percentage_ls = []
     for ix, (adm, regional_crop_mask) in enumerate(regional_crop_mask_dict.items()):
         masked_rs_image = regional_crop_mask * rs_image
         qualitative_pixel = masked_rs_image > 0
 
         quality_percentage = np.sum(qualitative_pixel) / np.sum(regional_crop_mask)
-        quality_data.loc[ix, date] = quality_percentage
+        quality_percentage_ls.append(quality_percentage)
 
         # check the availability of qualitative pixels
         # If less than a certain ratio of the theoretical available pixel we safe None values to be filled later
         if quality_percentage < 0.1:
             historgram_dict[adm].append(None)
-            ndvi_data.loc[ix, date] = np.nan
+            mean_value_ls.append(np.nan)
             continue
 
         # extract list of values from qualitative pixels
@@ -99,7 +101,9 @@ for date, ndvi_image_filename in zip(date_list, ndvi_image_filename_list):
         historgram_dict[adm].append(hist)
 
         # take averge
-        ndvi_data.loc[ix, date] = np.mean(rs_values)
+        mean_value_ls.append(np.mean(rs_values))
+    ndvi_data.loc[:, date] = mean_value_ls
+    quality_data.loc[:, date] = quality_percentage_ls
 
 ### FILLING MISSING VALUES ####
 
@@ -111,14 +115,14 @@ for i in range(len(ndvi_data)):
                                                                           periode_length_guess=365,
                                                                           N=5)
 
-
+"""
 plt.plot(ndvi_data.values[i, 5:], 'o-', label="Qualitative NDVI-values")
 plt.plot(cleaned_ndvi_data.iloc[i, 5:], linestyle="--", alpha=.85, label="Fourier Approximation")
 plt.ylabel("NDVI")
 plt.legend(loc="upper right")
 plt.title("Filling missing values in NDVI curves")
 plt.show()
-
+"""
 
 ### VISUALIZE DATA QUALITY #####
 # example from Tanzania
@@ -143,19 +147,22 @@ width = 0.25  # width of the bars
 x = np.arange(len(months))  # the label locations
 
 plt.figure(figsize=(12, 6))
-plt.bar(x - width, tanz_monthly_average_quality, width, label='Tanzania')
-plt.bar(x, zamb_monthly_average_quality, width, label='Zambia')
-plt.bar(x + width, mala_monthly_average_quality, width, label='Malawi')
+plt.grid(axis='y')
+alpha = .8
+plt.bar(x - width, tanz_monthly_average_quality, width, label='Tanzania', alpha=alpha)
+plt.bar(x, zamb_monthly_average_quality, width, label='Zambia', alpha=alpha)
+plt.bar(x + width, mala_monthly_average_quality, width, label='Malawi', alpha=alpha)
 
 # Add titles and labels
-plt.title('Monthly Average Quality Ratio of MODIS Images', fontsize=14)
-plt.xlabel('Month', fontsize=12)
+#plt.title('Monthly Average Quality Ratio of MODIS Images', fontsize=14)
 plt.ylabel('Average Quality Ratio', fontsize=12)
 plt.xticks(x, months)
 
 # Display grid and legend
-plt.grid(axis='y')
 plt.legend()
+plt.savefig("modis_quality.pdf", format="pdf")
+plt.show()
+
 
 """
 ### SMOOTHING ###
