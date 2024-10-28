@@ -1,3 +1,5 @@
+import math
+
 from optuna import TrialPruned
 
 from config import SEED
@@ -12,7 +14,7 @@ import tensorflow as tf
 tf.random.set_seed(SEED)
 from tensorflow.keras import Sequential
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dropout, LSTM, Dense, Conv1D, Flatten, Bidirectional, concatenate
+from tensorflow.keras.layers import Input, Dropout, LSTM, Dense, Conv1D, Flatten, MaxPooling1D,  concatenate
 
 from data_assembly import group_years
 
@@ -73,10 +75,25 @@ def create_cnn(t, f, s, trial=None, params=None):
         static_dropout = trial.suggest_float('static_dropout', 0.0, 0.5)
 
         # Convolutional layer hyperparameters
-        num_conv_layers = trial.suggest_int('num_conv_layers', 1, 5)
-        conv_filters = trial.suggest_categorical('conv_filters', [1, 2, 4, 8, 16, 32, 64])
-        max_kernel_size = t / num_conv_layers
+        num_conv_layers = trial.suggest_int('num_conv_layers', 1, 4)
+        conv_filters = trial.suggest_categorical('conv_filters', [1, 2, 4]) # , 8 , 16, 32, 64
+        max_kernel_size = math.floor((t - 1) / num_conv_layers) + 1
         kernel_size = trial.suggest_int('kernel_size', 2, np.min([16, max_kernel_size]))
+        # simulate kernel and pooling to get max pool size
+        max_pool_size = 1
+        while True:
+            left = t
+            for _ in range(num_conv_layers):
+                left += 1 - kernel_size
+                left = math.floor(left / (max_pool_size + 1))
+            if left >= 1:
+                max_pool_size += 1
+            if left <= 1:
+                break
+        if max_pool_size > 1:
+            pool_size = trial.suggest_int('pool_size', 1, np.min([8, max_pool_size]))
+        else:
+            pool_size = 1
         conv_dropout = trial.suggest_float('conv_dropout', 0.0, 0.5)
 
         # Dense layer hyperparameters
@@ -90,6 +107,7 @@ def create_cnn(t, f, s, trial=None, params=None):
         num_conv_layers = params['num_conv_layers']
         conv_filters = params['conv_filters']
         kernel_size = params['kernel_size']
+        pool_size = params['pool_size']
         conv_dropout = params['conv_dropout']
 
         # Dense layer hyperparameters
@@ -111,8 +129,9 @@ def create_cnn(t, f, s, trial=None, params=None):
                    kernel_size=kernel_size,
                    activation="relu",
                    padding='valid')(x)
+        if pool_size > 1:
+            x = MaxPooling1D(pool_size=pool_size)(x)
         x = Dropout(rate=conv_dropout)(x)
-
     x = Flatten()(x)
 
     # Concatenate with static data
@@ -224,11 +243,12 @@ def init_model(X, model_name, trial=None, params=None):
         _, t, f = X_time.shape
         if trial:
             params = {
-                "epochs": trial.suggest_int('epochs', 100, 1000),
+                "epochs": 500, #trial.suggest_int('epochs', 100, 1000),
                 "batch_size": trial.suggest_int('batch_size', 50, 500)
             }
             return create_cnn(t=t, f=f, s=s, trial=trial), params
         else:
+            params["epochs"] = 500
             return create_cnn(t=t, f=f, s=s, params=params), params
     elif model_name == 'lstm':
         X_static, X_time = X
@@ -356,7 +376,7 @@ class OptunaOptimizerTF:
         # return (best models mse, best models params
         return self.best_mse, self.best_params
 
-    def train_best_model(self, X, y):
+    def train_best_model(self, X, y, validation_data=None):
         """
         This method applies the best parameters (found by optimization) to any dataset of X and y
         trains the optimal model and exports the model as well as the transformed X
@@ -369,10 +389,21 @@ class OptunaOptimizerTF:
 
         model, _ = init_model(X=X, model_name=self.model_type, params=self.best_params)
 
-        # Train the Keras model
-        model.fit(X, y,
-                  epochs=self.best_params["epochs"],
-                  batch_size=self.best_params["batch_size"],
-                  verbose=0)
+        if validation_data:
+            # Train the Keras model
+            history = model.fit(X, y,
+                                epochs=self.best_params["epochs"],
+                                batch_size=self.best_params["batch_size"],
+                                validation_data=validation_data,
+                                verbose=0)
 
-        return model
+            return model, history
+        else:
+            # Train the Keras model
+            model.fit(X, y,
+                      epochs=self.best_params["epochs"],
+                      batch_size=self.best_params["batch_size"],
+                      verbose=0)
+
+            return model
+

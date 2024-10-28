@@ -21,17 +21,17 @@ def get_study_runtime_and_trials(file_path):
     if not trials:
         return 0, 0
 
-    start_time = trials[0].datetime_start
-    end_time = trials[-1].datetime_start
+    # Calculate the runtime as the sum of individual trial runtimes
+    total_runtime_seconds = sum(
+        (t.datetime_complete - t.datetime_start).total_seconds()
+        for t in trials
+        if t.datetime_start and t.datetime_complete
+    )
 
     # Filter out only completed or pruned trials
     num_trials = len(trials)
 
-    if start_time and end_time:
-        runtime = end_time - start_time
-        return runtime.total_seconds(), num_trials  # Return runtime in seconds and number of valid trials
-    else:
-        return 0, num_trials
+    return total_runtime_seconds, num_trials
 
 
 def calculate_total_runtime_and_average_trials(folder_path):

@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 
 from config import RESULTS_DATA_DIR, COUNTRY_COLORS, COUNTRY_MARKERS
 from data_loader import load_yield_data
-from metrics import calc_rmse, calc_r2, calc_brr2
+from metrics import calc_rmse, calc_r2, calc_brr2, mean_estimator
 from run import open_run
-from visualizations.visualization_functions import plot_performance_map, plot_map
+from visualizations.visualization_functions import plot_performance_map, plot_map, plot_performance_box_x_map
 
 """
 This script unfolds the yield estimation performance by giving metrics for each cluster set and model.
@@ -22,7 +22,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '2110_yield_country_xgb_3_60_60_optuna_600_250_100_5_vif5'
+run_name = '2510_yield_all_cnn_32_60_60_optuna_7200_100_50_5'
 #run = open_run(run_name=run_name)
 #model_dir, params_df, feature_ls_ls = run.load_model_and_params()
 #for i, (name, model) in enumerate(model_dir.items()):
@@ -45,16 +45,15 @@ if "anomaly" in run_name:
 else:
     objective = "yield"
 
-rmse = calc_rmse(y_pred=prediction_df["y_pred"], y_true=prediction_df[objective])
-brr2 = calc_brr2(y_pred=prediction_df["y_pred"], y_true=prediction_df[objective], y_benchmark=prediction_df["y_bench"])
-print(f"Run '{run_name}' achieved RMSE (BR-R2): {np.round(rmse, 3)} ({np.round(brr2, 3)})")
-
-
+prediction_df["y_mean"] = np.nan
 performance_dict = {"country": [], "adm": [], "n": [], "rmse": [], "r2": [], "brr2": []}
 for adm, adm_results_df in prediction_df.groupby("adm"):
     if len(adm_results_df) < 3:
         continue
     y_true = adm_results_df[objective]
+
+    y_mean = mean_estimator(y_true)
+    prediction_df.loc[adm_results_df.index, "y_mean"] = y_mean
 
     rmse = calc_rmse(y_true=y_true, y_pred=adm_results_df["y_pred"])
 
@@ -110,6 +109,13 @@ plt.savefig("br_r2_motivation.pdf", format="pdf") # TODO path
 plt.show()"""
 
 performance_df = pd.DataFrame(performance_dict)
+
+rmse = calc_rmse(y_pred=prediction_df["y_pred"], y_true=prediction_df[objective])
+r2 = calc_brr2(y_pred=prediction_df["y_pred"], y_true=prediction_df[objective], y_benchmark=prediction_df["y_mean"])
+brr2 = calc_brr2(y_pred=prediction_df["y_pred"], y_true=prediction_df[objective], y_benchmark=prediction_df["y_bench"])
+print(f"Run '{run_name}' achieved RMSE (BR-R2): {np.round(rmse, 3)} ({np.round(brr2, 3)})")
+
+plot_performance_box_x_map(performance_df, metrics=(r2, brr2), save_path=RESULTS_DATA_DIR / f"yield_predictions/{run_name}/plots/overall/box_x_map.pdf")
 
 # plot results as a map
 plot_performance_map(performance_data=performance_df.drop("country", axis=1), performance_column="r2", result_filename=run_name)

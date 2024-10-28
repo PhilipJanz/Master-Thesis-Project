@@ -1,4 +1,6 @@
 import os
+import pickle
+from pathlib import WindowsPath
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 #os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
@@ -21,6 +23,8 @@ from optuna_modeling.optuna_optimizer_tf import OptunaOptimizerTF
 import optuna
 from optuna.pruners import ThresholdPruner
 import tensorflow as tf
+
+from transfer_functions import get_last_hidden
 
 tf.random.set_seed(SEED)
 
@@ -48,7 +52,7 @@ There are two main loops:
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "1810"
+date = "2810"
 
 # define objective (target)
 objective = "yield"
@@ -60,16 +64,16 @@ data_split = "all"
 feature_file = "32_60_60"
 
 # choose model or set of models that are used. This script is for time-sensitive data: cnn & lstm
-model_type = "lstm"
+model_type = "cnn"
 
 # number of principal components that are used to make soil-features (using PCA)
 soil_pc_number = 2
 
 # optuna hyperparameter optimization params
 # choose timeout
-timeout = 3 * 3600
+timeout = 3600
 # choose duration (sec) of optimization using optuna
-n_trials = 200
+n_trials = 100
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
 # choose a upper limit on loss (mse) for pruning an optuna trial (early stopping due to weak performance)
@@ -113,7 +117,7 @@ else:
               timeout=timeout,
               n_trials=n_trials,
               n_startup_trials=n_startup_trials,
-              python_file=BASE_DIR / "code/5_modeling/optuna_modeling/transfer_learning_source_model_nn.py") #os.path.abspath(__file__))
+              python_file=BASE_DIR / "code/5_modeling/optuna_modeling/transfer_learning_source_model_cnn.py") #os.path.abspath(__file__))
     run.trans_dir = run.run_dir / "transfer_features"
     os.mkdir(run.trans_dir)
 
@@ -147,12 +151,8 @@ else:
 
 for source_name, source_yield_df in source_yield_df_iter:
     #avg_var = np.mean(source_yield_df.groupby("adm")["yield"].var().values)
-    if source_name == "Tanzania":
-        continue
-
-    # in case you loaded an existing run, you can skip the clusters already predicted
-    if np.all(~source_yield_df["y_pred"].isna()):
-        continue
+    #if source_name == "Tanzania":
+    #    continue
 
     # extract source data
     source_ix = source_yield_df.index
@@ -172,16 +172,12 @@ for source_name, source_yield_df in source_yield_df_iter:
 
     # LOYOCV - leave one year out cross validation
     for year_out in np.unique(years_source):
-        # year_out = 2016
         year_out_bool = (years_source == year_out)
-
-        # in case you loaded an existing run, you can skip the year already predicted
-        if np.all(~source_yield_df[year_out_bool]["y_pred"].isna()):
-            continue
 
         # split the data
         X_train, y_train, years_train = (X_static_source[~year_out_bool], X_time_source[~year_out_bool]), y_source[~year_out_bool], years_source[~year_out_bool]
         X_test, y_test = (X_static_source[year_out_bool], X_time_source[year_out_bool]), y_source[year_out_bool]
+
 
         # hyperparameter-selection using optuna
         sampler = optuna.samplers.TPESampler(n_startup_trials=run.n_startup_trials, multivariate=True,
@@ -194,12 +190,33 @@ for source_name, source_yield_df in source_yield_df_iter:
                                  model_type=run.model_type,
                                  num_folds=num_folds)
 
-        mse, best_params = opti.optimize(n_trials=run.n_trials, timeout=run.timeout,
+        # try to load existing optuna study:
+        study = run.try_load_optuna_study(study_name=f"{source_name}_{year_out}")
+        if study:
+            opti.study = study
+            completed_trails = len(opti.study.trials)
+
+            if completed_trails == run.n_trials:
+                continue
+            elif completed_trails > run.n_trials:
+                raise AssertionError("Found completed_trails > run.n_trials: this should not occur. Check settings")
+            else:
+                pass
+        else:
+            completed_trails = 0
+
+        # execute optimizer
+        mse, best_params = opti.optimize(n_trials=run.n_trials - completed_trails, timeout=run.timeout,
                                          show_progress_bar=True, print_result=False, n_jobs=1)
         run.save_optuna_study(study=opti.study)
 
         # train best model
-        trained_model = opti.train_best_model(X=X_train, y=y_train)
+        trained_model, history = opti.train_best_model(X=X_train, y=y_train, validation_data=(X_test, y_test))
+        # Open a file in write mode
+        with open(run.run_dir / f"models/history_{source_name}_{year_out}.pkl", 'wb') as file:
+            # Serialize and save the object to the file
+            pickle.dump(history, file)
+
 
         # predict train- & test-data
         y_pred_train = trained_model.predict(X_train).T[0]
@@ -231,30 +248,35 @@ for source_name, source_yield_df in source_yield_df_iter:
         # save trained model and best params
         run.save_model_and_params(name=f"{source_name}_{year_out}", model=trained_model, params=opti.best_params)
 
-        # save shapley values
-        #run.save_shap(name=f"{source_name}_{year_out}", explainer=explainer,
-        #              shap_data=pd.DataFrame(shap_values[:,:,0], columns=feature_names_))
+        transfer_feature_df = get_last_hidden(model=trained_model, X=X_)
 
-        # extract learned features for all data by taking results of last hidden layer
-        transfer_feature_mtx = []
-        # get last weights before network output
-        last_weights = trained_model.layers[-1].get_weights()
-        # set all weights to zero
-        last_weights[0] *= 0
-        last_weights[1] *= 0
-        # for each unit set weight to 1 so the networks output is the output of that hidden unit
-        for i in range(best_params["last_dense_units"]):
-            last_weights[0] *= 0
-            last_weights[0][i] = 1
-            trained_model.layers[-1].set_weights(last_weights)
-            transfer_feature_mtx.append(trained_model.predict(X_, verbose=0))
-
-        transfer_feature_df = pd.DataFrame(np.hstack(transfer_feature_mtx), columns=[f"transfer_feature_{i + 1}" for i in range(best_params["dense_units"])])
         transfer_feature_df = pd.concat([yield_df[["country", "adm1", "adm2", "adm", "harv_year"]], transfer_feature_df], axis=1)
         transfer_feature_df.to_csv(run.trans_dir / f"{source_name}_{year_out}.csv", index=False)
 
         # After each model is done
         del trained_model
+
+        # make transfer models with country-hold-out
+        for country_out, country_yield_df in source_yield_df.groupby("country"):
+            # further filtering the training set by leaving out one country
+            country_year_out_bool = (source_yield_df.loc[~year_out_bool, "country"] == country_out)
+            country_out_bool = (source_yield_df.loc[:, "country"] == country_out)
+
+            # train on data without hold-out year and hold-out country
+            country_out_col_bool = np.array([country_out in name for name in static_feature_names_])
+            X_train_, y_train_ = (X_train[0][~country_year_out_bool][:, ~country_out_col_bool], X_train[1][~country_year_out_bool]), y_source[~year_out_bool][~country_year_out_bool]
+            trained_model = opti.train_best_model(X=X_train_, y=y_train_)
+
+            # predict transfer features for hold out country
+            X_country = (X_static_[country_out_bool][:, ~country_out_col_bool], X_time[country_out_bool]) #TODO check: quick and dirty
+            transfer_feature_df = get_last_hidden(model=trained_model, X=X_country)
+
+            transfer_feature_df = pd.concat([country_yield_df[["country", "adm1", "adm2", "adm", "harv_year"]].reset_index(drop=True), transfer_feature_df], axis=1)
+            transfer_feature_df.to_csv(run.trans_dir / f"{source_name}_{country_out}_{year_out}.csv", index=False)
+
+            # After each model is done
+            del trained_model
+
 
         # save predictions and performance
         run.save_predictions(prediction_df=yield_df)

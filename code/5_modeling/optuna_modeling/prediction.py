@@ -92,7 +92,7 @@ yield_df = load_yield_data(benchmark_column=True)
 # load and process features
 processed_feature_df = load_processed_features(feature_file)
 # test if datasets have same row order
-assert np.all(processed_feature_df[["adm", "harv_year"]] == yield_df[["adm", "harv_year"]])
+assert np.all(processed_feature_df[["adm"   , "harv_year"]] == yield_df[["adm", "harv_year"]])
 processed_feature_df = processed_feature_df.drop(['country', 'adm1', 'adm2', 'adm', 'harv_year'], axis=1)
 
 # load feature selection
@@ -240,6 +240,12 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
             print(f"{split_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)} ({round(test_nse, 2)})")
         else:
             print(f"{split_name} - {year_out} finished with train-mse: {round(train_mse, 3)} ({round(train_nse, 2)}) | test-mse: {round(test_mse, 3)}")
+
+        if best_params:
+            # save trained model and best params
+            trained_model.feature_names = feature_names
+            opti.best_params["feature_names"] = feature_names
+            run.save_model_and_params(name=f"{split_name}_{year_out}", model=trained_model, params=opti.best_params)
 
         # save predictions and performance
         run.save_predictions(prediction_df=yield_df)

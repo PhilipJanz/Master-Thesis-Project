@@ -284,3 +284,57 @@ ax.grid(True, which='major', linestyle='--', linewidth=0.5, color='gray', alpha=
 
 #plt.savefig("example_predicion.svg")
 plt.show()
+
+
+
+#################################################################
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+from data_loader import load_yield_data, load_timeseries_features
+feature_file = "32_60_60"
+timeseries_feature_ndarray, feature_names, data_id_df = load_timeseries_features(feature_file)
+yield_df = load_yield_data()
+
+adm_yield_df = yield_df.iloc[9:23]
+
+fig, ax = plt.subplots(figsize=(5, 5))
+plt.plot(adm_yield_df["harv_year"], adm_yield_df["yield"], color="grey")
+plt.ylabel("Yield (T/ha)")
+# Remove right and upper boundaries
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+plt.savefig("graphics/Dedza_yield_ts.svg", format="svg")
+plt.show()
+
+good_idx = 19 # good year 2021
+flood_idx = 18 # flood year 2019
+drought_idx = 15 # drought year 2016
+
+fig, ax = plt.subplots(3, 1, figsize=(6, 5))
+
+for ax_i, idx in zip(ax, [good_idx, flood_idx, drought_idx]):
+    ex = timeseries_feature_ndarray[idx]
+    feature_ls = [arr[0][:-2] for arr in feature_names]
+
+    sns.heatmap(ex.T, ax=ax_i, cmap="vlag", vmin=-2.5, vmax=2.5)
+
+    # Set the y-axis (vertical) ticks using feature_names
+    ax_i.set_yticks([i + 0.5 for i in range(len(feature_names))])
+    ax_i.set_yticklabels(feature_ls, rotation=0, va='center')
+
+    # Remove x-axis ticks
+    ax_i.set_xticks([])
+
+    # Customize the color bar to show only "Low" and "High"
+    cbar = ax_i.collections[0].colorbar
+    cbar.set_ticks([cbar.vmin, cbar.vmax])
+    cbar.set_ticklabels(['Low', 'High'])
+
+    # Add a thin border around the heatmap
+    for spine in ax_i.spines.values():
+        spine.set_visible(True)
+        spine.set_linewidth(0.5)  # Set the border width to 0.5
+plt.tight_layout()
+plt.savefig("graphics/good_flood_droght_feature_matricies.svg", format="svg")
+plt.show()

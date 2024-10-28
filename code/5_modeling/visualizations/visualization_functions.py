@@ -2,10 +2,11 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from config import PROCESSED_DATA_DIR, RESULTS_DATA_DIR, AOI
+from config import PROCESSED_DATA_DIR, RESULTS_DATA_DIR, AOI, COUNTRY_COLORS
 from data_assembly import make_adm_column
 from maps.map_functions import load_aoi_map, load_africa_map
 import seaborn as sns
+import matplotlib.patches as mpatches
 
 
 def plot_performance_map(performance_data, performance_column, result_filename, cmap="RdYlBu"):
@@ -156,11 +157,85 @@ def ax_plot_map(fig, ax, df, column, cmap="viridis", cmap_range=None):
         sm = plt.cm.ScalarMappable(cmap=cmap)
     sm._A = []  # Dummy array for the ScalarMappable
     cbar = fig.colorbar(sm, ax=ax, fraction=0.036, pad=0.04)
-    cbar.set_label(column)
+    #cbar.set_label(column)
 
     africa_map.boundary.plot(edgecolor="white", linewidth=1, ax=ax, alpha=.8)
 
     return ax
+
+
+def plot_performance_box_x_map(performance_df, metrics, save_path=None):
+    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(9, 9), width_ratios=[1, 3])
+    (ax1, ax2), (ax3, ax4) = axs
+
+    # Prepare boxplots
+    r2_data = {}
+    brr2_data = {}
+    colors = []
+    for country, color in COUNTRY_COLORS.items():
+        country_df = performance_df[performance_df["country"] == country]
+        r2_data[country] = country_df["r2"].values
+        brr2_data[country] = country_df["brr2"].values
+        colors.append(color)
+
+    medianprops = {"linewidth": 1.7, "color": "black"}  # Adjust linewidth as needed
+    sns.boxplot(
+        data=r2_data,
+        ax=ax1,
+        palette=colors,
+        medianprops=medianprops
+    )
+    sns.boxplot(
+        data=brr2_data,
+        ax=ax3,
+        palette=colors,
+        medianprops=medianprops
+    )
+
+    # Add dashed horizontal line at y=0
+    ax1.axhline(0, color='gray', linestyle='--', linewidth=1.2)
+    ax3.axhline(0, color='gray', linestyle='--', linewidth=1.2)
+
+    # Set labels and remove x-tick labels
+    ax1.set_xticklabels([])
+    ax3.set_xticklabels([])
+    ax1.set_ylabel(r"$\mathrm{R}^2$", rotation=0)
+    ax3.set_ylabel(r"$\mathrm{BR-R}^2$", rotation=0, labelpad=20) # , labelpad=50, ha='center', va='center'
+
+    # Custom legend below the plot
+    legend_patches = []
+    for country, color in COUNTRY_COLORS.items():
+        legend_patches.append(mpatches.Patch(color=color, label=country))
+    fig.legend(handles=legend_patches, loc="lower center", ncol=3, bbox_to_anchor=(.5, -0.02))
+
+    # Plot maps
+    ax_plot_map(fig, ax=ax2, df=performance_df, column="r2", cmap="RdYlBu", cmap_range=(-1, 1))
+    ax_plot_map(fig, ax=ax4, df=performance_df, column="brr2", cmap="RdYlGn", cmap_range=(-1, 1))
+    ax2.set_rasterized(True)
+    ax4.set_rasterized(True)
+    ax2.text(0.02, 0.98, r"$\mathrm{R}^2$: " + str(np.round(metrics[0], 2)), transform=ax2.transAxes,
+         fontsize=12, verticalalignment='top', horizontalalignment='left',
+         bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5'))
+    ax4.text(0.02, 0.98, r"$\mathrm{BR-R}^2$: " + str(np.round(metrics[1], 2)), transform=ax4.transAxes,
+         fontsize=12, verticalalignment='top', horizontalalignment='left',
+         bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5'))
+
+    # Remove coordinates
+    ax2.set_xticks([])
+    ax2.set_yticks([])
+    ax4.set_xticks([])
+    ax4.set_yticks([])
+
+    # Add space on the left for annotations
+    #plt.subplots_adjust(left=0.1)
+
+    plt.tight_layout()
+    # Show and save the plot
+    if save_path:
+        plt.savefig(save_path, format="pdf", dpi=150, bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
 
 
 def plot_corr_matrix(corr_df, title, save_path=None):

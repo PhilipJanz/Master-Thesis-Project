@@ -12,14 +12,12 @@ RESULTS_DATA_DIR = DATA_DIR / 'modeling_results'
 RUN_DIR = RESULTS_DATA_DIR / 'yield_predictions'
 
 # colors
-TANZANIA_COLOR = "#2ca02c"
-ZAMBIA_COLOR = "#9467bd"
-KENYA_COLOR = "#1f77b4"
-MALAWI_COLOR = "#d62728"
-ETHIOPIA_COLOR = "#ff7f0e"
-COUNTRY_COLORS = {"Tanzania": TANZANIA_COLOR,
-                  "Zambia": ZAMBIA_COLOR,
-                  "Malawi": MALAWI_COLOR}
+TANZANIA_COLOR = "#ca8a60"
+ZAMBIA_COLOR = "#94d6c7"
+MALAWI_COLOR = "#ada4e2"
+COUNTRY_COLORS = {"Zambia": ZAMBIA_COLOR,
+                  "Malawi": MALAWI_COLOR,
+                  "Tanzania": TANZANIA_COLOR}
 COUNTRY_MARKERS = {"Tanzania": "o",
                    "Zambia": "v",
                    "Malawi": "p"}

@@ -1,17 +1,16 @@
-
 import os
 
 import numpy as np
 import pandas as pd
 
-from data_loader import load_yield_data, yield_datapoints_after_filtering
-from evaluation.optuna_inspection import calculate_total_runtime_and_average_trials
-from metrics import calc_rmse, calc_r2, calc_brr2, mean_estimator, calc_mse
 from config import RESULTS_DATA_DIR
+from data_loader import yield_datapoints_after_filtering, load_yield_data
+from evaluation.optuna_inspection import calculate_total_runtime_and_average_trials
+from metrics import mean_estimator, calc_rmse, calc_brr2
 
 """
 This script unfolds the yield estimation performance by giving metrics for each cluster set and model.
-Additionally it plots the performance as map (for each admin) and charts.
+/Additionally it plots the performance as map (for each admin) and charts.
 """
 
 
