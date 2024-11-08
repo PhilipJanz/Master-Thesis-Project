@@ -6,9 +6,11 @@ from crop_calendar.crop_calendar_functions import make_cc, plot_my_crop_calendar
 from maps.map_functions import load_aoi_map
 
 """
-This script creates a crop calendar for each region of interest and compares it to the ASAP crop calendar for validation. 
+This script creates a crop calendar for each region of interest and compares it to the FAO crop calendar for validation. 
 It is based on the same principle like the ASAP CC but is needed because the ASAP calendar is not covering all regions.
+This approach is applying Worldcereal crop mask for maize and is therefore crop specific.
 """
+
 
 # load administrative boundaries (AOI) with geographic information
 adm_map = load_aoi_map()

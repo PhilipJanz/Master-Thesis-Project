@@ -4,11 +4,20 @@ import pandas as pd
 
 from config import PROCESSED_DATA_DIR, FEATURE_SELECTION_DIR
 
+
+"""
+This scripts provides functions that load data from all different stages in the analysis. 
+This helps to maintain consistency across multiple scripts that load the same data.
+"""
+
+
+
 # variables for filtering data
 harv_year_range = (2001, 2023)
 
 # variables for unit test (please alter if changes in the yield database occure)
 # set 'None' to deactivate a test
+# specify number of yield datapoints to avoid inconsistencies
 yield_datapoints_after_filtering = 1927
 
 

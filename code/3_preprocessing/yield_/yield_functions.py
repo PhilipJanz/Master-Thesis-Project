@@ -55,6 +55,7 @@ def read_ethiopia_yield():
     print(f"Loaded {len(ethiopia_yield_df)} yield datapoints for Ethiopia.")
     return ethiopia_yield_df
 
+
 def read_malawi_yield():
     """
     Read raw yield data for Malawi
@@ -89,6 +90,35 @@ def read_malawi_yield():
     malawi_yield_df = malawi_yield_df[malawi_yield_df["adm2"] != "Likoma"]
     print(f"Loaded {len(malawi_yield_df)} yield datapoints for Malawi.")
     return malawi_yield_df
+
+
+def read_argentina_yield():
+    """
+    Read raw yield data for Argentina
+    :return: yield df
+    """
+    argen_yield_df = pd.read_csv(SOURCE_DATA_DIR / "yield/FEWS NET/maize_yield_argentina.csv")
+    # filtering irrigation season and others
+    argen_yield_df = argen_yield_df.rename(columns={"admin_1": "adm1", "admin_2": "adm2", "season_name": "season"})
+    argen_yield_df["harv_year"] = [int(date[:4]) for date in argen_yield_df.start_date]
+    argen_yield_df = argen_yield_df[["country", 'adm1', 'adm2', 'season', 'harv_year', 'indicator', 'value']]
+    #print(len(malawi_yield_df))
+    # drop duplicates
+    argen_yield_df = argen_yield_df.drop_duplicates()
+    #print(len(malawi_yield_df))
+    # if duplicates are found by leaving out the value, those duplicates have unequal values are have to be discarded
+    duplicates = argen_yield_df.duplicated(subset=['country', 'adm1', 'adm2', 'season', 'harv_year', 'indicator'], keep=False)
+    if any(duplicates):
+        print(f"{sum(duplicates) / 6} duplicates found")
+        duplicate_df = argen_yield_df[duplicates]
+        # Keep only the rows that are not duplicates
+        argen_yield_df = argen_yield_df[~duplicates]
+    argen_yield_df = argen_yield_df.pivot(index=['country', 'adm1', 'adm2', 'season', 'harv_year'],
+                                          columns='indicator', values='value').reset_index()
+    argen_yield_df = argen_yield_df.rename(columns={"Area Planted": "area", "Quantity Produced": "production", "Yield": "yield"})
+    argen_yield_df = argen_yield_df.dropna()
+    print(f"Loaded {len(argen_yield_df)} yield datapoints for Argentina.")
+    return argen_yield_df
 
 
 def read_zambia_yield():
@@ -157,6 +187,7 @@ def read_kenya_and_zambia_yield():
     yield_df = yield_df.dropna()
     print(f"Loaded {len(yield_df)} yield datapoints for Kenya & Zambia.")
     return yield_df
+
 
 def read_tanzania_yield():
     """
@@ -294,6 +325,7 @@ def detect_suspicious_data(data, column, threshold=0.0001, plot=False):
 
     return suspicious_df
 
+
 def is_close(a, b, rel_tol=0.01):
     """
     Determines if two values are relatively close
@@ -303,6 +335,7 @@ def is_close(a, b, rel_tol=0.01):
     :return: (bool) is close
     """
     return abs(a-b) <= rel_tol * max(abs(a), abs(b))
+
 
 def my_merge(df1, df2, on, rel_tol=0.01):
     """
@@ -344,6 +377,7 @@ def my_merge(df1, df2, on, rel_tol=0.01):
         print(f"Datapoints after merge: {len(merged_df)} (both: {n_consistency}, df1: {len(index1) - n_consistency}, df2: {len(index2)})")
     return merged_df
 
+
 def clean_pipeline(yield_df,
                    group_columns=["country", "adm1", "adm2", "season"],
                    min_area=1000,
@@ -352,6 +386,7 @@ def clean_pipeline(yield_df,
                    plot=False
                    ):
     """
+    Takes a yield dataset and applies an array of filter methods to discard data that would distort the analysis.
 
     :param yield_df: dataframe with yield information
     :param group_columns: group columns for which each individual has only one yield value per year
@@ -441,7 +476,7 @@ def clean_pipeline_yield(yield_df,
                          plot=False
                          ):
     """
-
+    Similar to clean_pipeline() for yield dataset without harvest area information (so only regarding yield values)
     :param yield_df: dataframe with yield information
     :param group_columns: group columns for which each individual has only one yield value per year
     :param max_yield: filter yield with more than this

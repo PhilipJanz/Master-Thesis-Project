@@ -1,25 +1,21 @@
 import os
 import pickle
 from pathlib import WindowsPath
+import time
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 #os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-
-from sklearn.decomposition import PCA
 
 from config import SEED, BASE_DIR
 
 import numpy as np
 import pandas as pd
-import shap
-from sklearn.preprocessing import StandardScaler
-from tensorflow.keras.models import Model
 
 from data_loader import load_yield_data, load_soil_pca_data, load_timeseries_features
 from data_assembly import make_X, make_dummies
 from metrics import calc_r2
 from run import list_of_runs, Run, open_run
-from optuna_modeling.optuna_optimizer_tf import OptunaOptimizerTF
+from optuna_modeling.optuna_optimizer_tf import OptunaOptimizerTF, plot_loss
 import optuna
 from optuna.pruners import ThresholdPruner
 import tensorflow as tf
@@ -31,28 +27,27 @@ tf.random.set_seed(SEED)
 # silence the message after each trial
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-#plt.switch_backend('agg')
 
 """
-This script is the final script that brings together all processed data to make groundbreaking yield predictions.
-It searches for the best combination of: predictive model (architecture and hyperparameters), sets of data cluster and feature set
+This script performs crop yield modeling using deep learning and Optuna for hyperparameter tuning. 
+It includes data loading, preprocessing, and model training with cross-validation and transfer learning.
+Key steps:
+1. Load and preprocess yield, timeseries, and soil data.
+2. Set up an Optuna study for hyperparameter optimization using cross-validation.
+3. Train and evaluate CNN or LSTM models on source data with leave-one-year-out.
+4. Save model predictions, performance metrics, and transfer features for further analysis.
 
-To make the code more slim we dont loop over the sets of clusters (all, country, adm, ndvi-cluster, ...)
-This has to be specified in the beginning of the code.
+An additional leave-one-country-out model provides transfer features for 'external transfer'
+TODO: Keep in mind that the hyperparameter tuning is still done on all countries, because its computational expensive.
+Could be changed. 
 
-There are two main loops:
-# TODO!
-    2. loop over clusters (eg. single countries)
-        inside the loop a nested-LOYOCV strategy is applied
-        the inner LOYOCV estimates the parameters performance and picks the best hyperparameters and feature set
-        the outer LOYOCV evaluated the best models performance on entirely unseen data
-        the picked hyperparameters and feature set are saved  for later investigation
+Important: this script used tensorflow which should be build in a separated python environment.
 """
 
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "2810"
+date = "2510"
 
 # define objective (target)
 objective = "yield"
@@ -70,13 +65,13 @@ model_type = "cnn"
 soil_pc_number = 2
 
 # optuna hyperparameter optimization params
-# choose timeout
-timeout = 3600
+# choose timeout (sec) for a single optimization study. This multiplied by the number of years give you the max runtime
+timeout = 7200
 # choose duration (sec) of optimization using optuna
 n_trials = 100
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 50
-# choose a upper limit on loss (mse) for pruning an optuna trial (early stopping due to weak performance)
+# choose an upper limit on loss (mse) for pruning an optuna trial (early stopping due to weak performance)
 pruner_upper_limit = .28
 # folds of optuna hyperparameter search
 num_folds = 5
@@ -149,6 +144,7 @@ if data_split == "all":
 else:
     source_yield_df_iter = yield_df.groupby(data_split)
 
+start = time.time()
 for source_name, source_yield_df in source_yield_df_iter:
     #avg_var = np.mean(source_yield_df.groupby("adm")["yield"].var().values)
     #if source_name == "Tanzania":
@@ -172,6 +168,8 @@ for source_name, source_yield_df in source_yield_df_iter:
 
     # LOYOCV - leave one year out cross validation
     for year_out in np.unique(years_source):
+        #if year_out < 2023:
+        #    continue
         year_out_bool = (years_source == year_out)
 
         # split the data
@@ -195,6 +193,7 @@ for source_name, source_yield_df in source_yield_df_iter:
         if study:
             opti.study = study
             completed_trails = len(opti.study.trials)
+            opti.best_params = opti.study.best_params
 
             if completed_trails == run.n_trials:
                 continue
@@ -204,7 +203,6 @@ for source_name, source_yield_df in source_yield_df_iter:
                 pass
         else:
             completed_trails = 0
-
         # execute optimizer
         mse, best_params = opti.optimize(n_trials=run.n_trials - completed_trails, timeout=run.timeout,
                                          show_progress_bar=True, print_result=False, n_jobs=1)
@@ -215,16 +213,12 @@ for source_name, source_yield_df in source_yield_df_iter:
         # Open a file in write mode
         with open(run.run_dir / f"models/history_{source_name}_{year_out}.pkl", 'wb') as file:
             # Serialize and save the object to the file
-            pickle.dump(history, file)
-
+            pickle.dump(history, file, pickle.HIGHEST_PROTOCOL)
+            plot_loss(history, save_path=run.run_dir / f"plots/history_{source_name}_{year_out}.pdf")
 
         # predict train- & test-data
         y_pred_train = trained_model.predict(X_train).T[0]
         y_pred_test = trained_model.predict(X_test).T[0]
-
-        # estimate shap values
-        #explainer = shap.DeepExplainer(trained_model, X_train)
-        #shap_values = explainer.shap_values(X_test)
 
         # write the predictions into the result df
         train_mse = np.mean((y_pred_train - y_train) ** 2)
@@ -258,17 +252,21 @@ for source_name, source_yield_df in source_yield_df_iter:
 
         # make transfer models with country-hold-out
         for country_out, country_yield_df in source_yield_df.groupby("country"):
+            if sum(source_yield_df.loc[year_out_bool, "country"] == country_out) == 0:
+                continue
             # further filtering the training set by leaving out one country
             country_year_out_bool = (source_yield_df.loc[~year_out_bool, "country"] == country_out)
             country_out_bool = (source_yield_df.loc[:, "country"] == country_out)
 
             # train on data without hold-out year and hold-out country
             country_out_col_bool = np.array([country_out in name for name in static_feature_names_])
+            X_country = (X_static_[country_out_bool][:, ~country_out_col_bool], X_time[country_out_bool])
+            y_country = y_source[country_out_bool]
             X_train_, y_train_ = (X_train[0][~country_year_out_bool][:, ~country_out_col_bool], X_train[1][~country_year_out_bool]), y_source[~year_out_bool][~country_year_out_bool]
-            trained_model = opti.train_best_model(X=X_train_, y=y_train_)
+            trained_model, history = opti.train_best_model(X=X_train_, y=y_train_, validation_data=(X_country, y_country))
+            plot_loss(history, save_path=run.run_dir / f"plots/history_{source_name}_{country_out}_{year_out}.pdf")
 
             # predict transfer features for hold out country
-            X_country = (X_static_[country_out_bool][:, ~country_out_col_bool], X_time[country_out_bool]) #TODO check: quick and dirty
             transfer_feature_df = get_last_hidden(model=trained_model, X=X_country)
 
             transfer_feature_df = pd.concat([country_yield_df[["country", "adm1", "adm2", "adm", "harv_year"]].reset_index(drop=True), transfer_feature_df], axis=1)
@@ -284,6 +282,3 @@ for source_name, source_yield_df in source_yield_df_iter:
 
         # save run
         run.save()
-
-
-# VISUALIZATION ########################################################################################################

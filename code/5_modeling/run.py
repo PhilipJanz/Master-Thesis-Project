@@ -21,6 +21,10 @@ def open_run(run_name):
 
 
 class Run:
+    """
+    A run organizes a single modeling approach, that aims to predict on all data.
+    Next to the optuna optimization studies it saves models, shap values, plots and so on.
+    """
     def __init__(self,
                  name,
                  objective,

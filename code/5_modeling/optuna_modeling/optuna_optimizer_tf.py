@@ -1,5 +1,6 @@
 import math
 
+from matplotlib import pyplot as plt
 from optuna import TrialPruned
 
 from config import SEED
@@ -17,6 +18,26 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dropout, LSTM, Dense, Conv1D, Flatten, MaxPooling1D,  concatenate
 
 from data_assembly import group_years
+
+
+"""
+This script provides functions and classes to build, optimize, and evaluate various neural network models 
+for time series and static feature data, using TensorFlow and Keras with Optuna for hyperparameter tuning.
+
+It incorporates three different model types:
+- NN: Constructs a feed-forward neural network
+- CNN: Builds a 1D convolutional neural network for time series data
+- LSTM: Initializes an LSTM network for sequential data
+
+Organized in
+- OptunaOptimizerTF: Manages the Optuna optimization process, including cross-validation on neural networks for time series data.
+
+Usage:
+- Define model architecture and parameters manually or let Optuna optimize them for improved performance.
+- Train and evaluate models with cross-validation, plot results, and adjust parameters as needed.
+
+Important: this script used tensorflow which should be build in a separated python environment.
+"""
 
 
 def create_nn(c, trial=None, params=None):
@@ -75,10 +96,11 @@ def create_cnn(t, f, s, trial=None, params=None):
         static_dropout = trial.suggest_float('static_dropout', 0.0, 0.5)
 
         # Convolutional layer hyperparameters
-        num_conv_layers = trial.suggest_int('num_conv_layers', 1, 4)
-        conv_filters = trial.suggest_categorical('conv_filters', [1, 2, 4]) # , 8 , 16, 32, 64
+        num_conv_layers = trial.suggest_int('num_conv_layers', 1, 5)
+        conv_filters = trial.suggest_categorical('conv_filters', [1, 2, 4, 8])  # , 16, 32, 64
         max_kernel_size = math.floor((t - 1) / num_conv_layers) + 1
         kernel_size = trial.suggest_int('kernel_size', 2, np.min([16, max_kernel_size]))
+        """
         # simulate kernel and pooling to get max pool size
         max_pool_size = 1
         while True:
@@ -94,6 +116,7 @@ def create_cnn(t, f, s, trial=None, params=None):
             pool_size = trial.suggest_int('pool_size', 1, np.min([8, max_pool_size]))
         else:
             pool_size = 1
+        """
         conv_dropout = trial.suggest_float('conv_dropout', 0.0, 0.5)
 
         # Dense layer hyperparameters
@@ -107,7 +130,10 @@ def create_cnn(t, f, s, trial=None, params=None):
         num_conv_layers = params['num_conv_layers']
         conv_filters = params['conv_filters']
         kernel_size = params['kernel_size']
-        pool_size = params['pool_size']
+        """if "pool_size" in params.keys():
+            pool_size = params['pool_size']
+        else:
+            pool_size = 1"""
         conv_dropout = params['conv_dropout']
 
         # Dense layer hyperparameters
@@ -129,8 +155,9 @@ def create_cnn(t, f, s, trial=None, params=None):
                    kernel_size=kernel_size,
                    activation="relu",
                    padding='valid')(x)
-        if pool_size > 1:
+        """if pool_size > 1:
             x = MaxPooling1D(pool_size=pool_size)(x)
+        """
         x = Dropout(rate=conv_dropout)(x)
     x = Flatten()(x)
 
@@ -268,7 +295,7 @@ def init_model(X, model_name, trial=None, params=None):
 
 class OptunaOptimizerTF:
     """
-
+    Organises an optuna study, by collecting insights about the data that it will be used on.
     :param X: (n x p)-array
     :param y: (n)-array
     :param years: (n)-array: important since we so 'leave-year-out-CV'
@@ -379,11 +406,11 @@ class OptunaOptimizerTF:
     def train_best_model(self, X, y, validation_data=None):
         """
         This method applies the best parameters (found by optimization) to any dataset of X and y
-        trains the optimal model and exports the model as well as the transformed X
+        trains the optimal model and exports the model
         :param X: 2D np.array with predictors
         :param y: np.array of yields
-        :param years: np.array of harvest years
-        :return: X_trans, trained_model
+        :param validation_data: (X_val, y_val) used to validate in each epoch
+        :return: model, (history)
         """
         assert self.best_params, ".apply() applies optimal parameters that are found by .optimize() or by setting them: self.best_params = {...}"
 
@@ -407,3 +434,28 @@ class OptunaOptimizerTF:
 
             return model
 
+
+def plot_loss(history, save_path):
+    # Extract training and validation loss from history
+    train_loss = history.history['loss']
+    val_loss = history.history['val_loss']
+
+    # Define epochs range
+    epochs = range(1, len(train_loss) + 1)
+
+    # Plot training and validation loss
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, train_loss, 'bo-', label='Training Loss')
+    plt.plot(epochs, val_loss, 'ro-', label='Validation Loss')
+    plt.title('Training and Validation Loss Progression')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.yscale('log')
+    plt.legend()
+    plt.grid(True)
+    # Show and save the plot
+    if save_path:
+        plt.savefig(save_path, format="pdf", dpi=600)
+        plt.close()
+    else:
+        plt.show()

@@ -5,6 +5,10 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import ee
 
+"""
+Access Google Earth Engine for processing & downloading all meteorological & remote sensing data needed.
+Notice!: Before initializing a session run ee.Authenticate() it successfully access gee.
+"""
 
 # ee.Authenticate()
 ee.Initialize()

@@ -176,7 +176,7 @@ def plot_performance_box_x_map(performance_df, metrics, save_path=None):
         country_df = performance_df[performance_df["country"] == country]
         r2_data[country] = country_df["r2"].values
         brr2_data[country] = country_df["brr2"].values
-        colors.append(color)
+        colors.append("lightgrey") # color ??
 
     medianprops = {"linewidth": 1.7, "color": "black"}  # Adjust linewidth as needed
     sns.boxplot(
@@ -198,15 +198,16 @@ def plot_performance_box_x_map(performance_df, metrics, save_path=None):
 
     # Set labels and remove x-tick labels
     ax1.set_xticklabels([])
-    ax3.set_xticklabels([])
+    #ax3.set_xticklabels([])
     ax1.set_ylabel(r"$\mathrm{R}^2$", rotation=0)
     ax3.set_ylabel(r"$\mathrm{BR-R}^2$", rotation=0, labelpad=20) # , labelpad=50, ha='center', va='center'
 
+    """
     # Custom legend below the plot
     legend_patches = []
     for country, color in COUNTRY_COLORS.items():
         legend_patches.append(mpatches.Patch(color=color, label=country))
-    fig.legend(handles=legend_patches, loc="lower center", ncol=3, bbox_to_anchor=(.5, -0.02))
+    fig.legend(handles=legend_patches, loc="lower center", ncol=3, bbox_to_anchor=(.5, -0.02))"""
 
     # Plot maps
     ax_plot_map(fig, ax=ax2, df=performance_df, column="r2", cmap="RdYlBu", cmap_range=(-1, 1))
@@ -233,7 +234,7 @@ def plot_performance_box_x_map(performance_df, metrics, save_path=None):
     # Show and save the plot
     if save_path:
         plt.savefig(save_path, format="pdf", dpi=150, bbox_inches='tight')
-        plt.close()
+        plt.show()
     else:
         plt.show()
 

@@ -6,7 +6,8 @@ from config import *
 from crop_calendar.crop_calendar_functions import copy_cc, plot_asap_crop_calendar, plot_asap_growth_time
 
 """
-This script reads crop calendars (CC) from different sources to merge, clean and plots them. 
+Loads & processes ASAP crop calendar.
+Not further used in this repository
 """
 
 

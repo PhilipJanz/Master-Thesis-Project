@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+"""
+This is a dirty testing script for whatever is in production 
+"""
 
 opti_alpha = np.exp(np.mean(np.log(best_alphas))) # np.median(best_alphas) # opti.best_params["alpha"]
 alphas = np.exp(np.arange(-20.8, 0, 0.2))

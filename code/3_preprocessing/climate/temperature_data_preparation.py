@@ -14,13 +14,16 @@ from maps.map_functions import load_aoi_map
 """
 This script prepares the ERA5 temperature data
 We are process the temperature for each region of interest and apply the WorldCereal crop mask
+Additionally the histogram approach by You et al. (2017) is implemented. Yet its not used in this repository yet. TODO!
 """
 
 # INITIALIZATION #######################
 
+# set histogram specification
 histogram_range = (270, 310)
 bins = 32
 
+# inspec the data to find reasonable boundaries for the histogram range
 """
 max_ls = []
 min_ls = []

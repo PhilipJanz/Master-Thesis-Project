@@ -2,7 +2,7 @@ import time
 
 from metrics import calc_r2
 
-wait_minutes = 240
+wait_minutes = 120
 for i in range(wait_minutes):
     print(f"{wait_minutes - i} minutes until the script starts.........", end="\r")
     #time.sleep(60)
@@ -28,47 +28,37 @@ import optuna
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 """
-This script is the final script that brings together all processed data to make groundbreaking yield predictions.
-It searches for the best combination of: predictive model (architecture and hyperparameters), sets of data cluster and feature set
-
-To make the code more slim we dont loop over the sets of clusters (all, country, adm, ndvi-cluster, ...)
-This has to be specified in the beginning of the code.
-
-There are two main loops:
-# TODO!
-    2. loop over clusters (eg. single countries)
-        inside the loop a nested-LOYOCV strategy is applied
-        the inner LOYOCV estimates the parameters performance and picks the best hyperparameters and feature set
-        the outer LOYOCV evaluated the best models performance on entirely unseen data
-        the picked hyperparameters and feature set are saved  for later investigation
+This script is similar to prediction.py with the difference that no feature set is selected. 
+Instead it uses the features transferred from a neural network trained in transfer_learning_source_model_cnn.py
 """
 
 
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "2810"
+date = "3110"
 
 # define objective (target)
 objective = "yield"
 
 # choose data split for single models by choosing 'country', 'adm' or a cluster from cluster_df
-data_split = "adm"
+data_split = "country"
 
 # source model
 source_run_name = "2510_yield_all_cnn_32_60_60_optuna_7200_100_50_5"
 source_name = "all"
+transfer = "internal" # internal, external
 
 # predictive model
-model_type = "lasso"
+model_type = "xgb"
 
 # optuna hyperparameter optimization params
-# choose timeout
-timeout = 600
+# choose timeout (sec) for a single optimization study. This multiplied by the number of years give you the max runtime
+timeout = 1200
 # choose duration (sec) of optimization using optuna
-n_trials = 100
+n_trials = 250
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
-n_startup_trials = 50
+n_startup_trials = 100
 # choose a upper limit on loss (mse) for pruning an optuna trial (early stopping due to weak performance)
 pruner_upper_limit = 1
 # folds of optuna hyperparameter search
@@ -87,7 +77,7 @@ soil_df = load_soil_pca_data(pc_number=2)
 source_run = open_run(source_run_name)
 
 # let's specify tun run (see run.py) using prefix (recommended: MMDD_) and parameters from above
-run_name = (f"{date}_{objective}_{data_split}_transfer_features_from_{source_name}_{model_type}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}")
+run_name = (f"{date}_{objective}_{data_split}_{transfer}_transfer_features_from_{source_name}_{model_type}_{timeout}_{n_trials}_{n_startup_trials}_{num_folds}")
 
 # load or create that run
 if run_name in list_of_runs():
@@ -154,10 +144,18 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
             yield_df.loc[split_yield_df.index[year_out_bool], "y_pred"] = 0.0
             yield_df.loc[split_yield_df.index[year_out_bool], "best_model"] = "no-source-model"
             continue
-        transfer_feature_df = pd.read_csv(source_run.trans_dir / f"{source_name}_{year_out}.csv")
+        if transfer == "external":
+            transfer_feature_df = pd.read_csv(source_run.trans_dir / f"{source_name}_{split_name}_{year_out}.csv")
+        elif transfer == "internal":
+            transfer_feature_df = pd.read_csv(source_run.trans_dir / f"{source_name}_{year_out}.csv")
+        else:
+            raise AssertionError("transfer either 'external' or 'internal'")
         feature_loc = ["transfer" in col for col in transfer_feature_df.columns]
         transfer_feature_names = transfer_feature_df.columns[feature_loc]
-        transfer_feature_mtx = transfer_feature_df.loc[split_yield_df.index, transfer_feature_names].values
+        if transfer == "external":
+            transfer_feature_mtx = transfer_feature_df.loc[:, transfer_feature_names].values
+        elif transfer == "internal":
+            transfer_feature_mtx = transfer_feature_df.loc[split_yield_df.index, transfer_feature_names].values
 
         X_ = np.concatenate([X, transfer_feature_mtx], 1)
         feature_names_ = np.concatenate([feature_names, transfer_feature_names])
@@ -225,20 +223,9 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
         # save predictions
         run.save_predictions(prediction_df=yield_df)
 
-    # break
-    # np.nanmean((yield_df.loc[cluster_yield_df.index]["y_pred"] - yield_df.loc[cluster_yield_df.index]["yield_anomaly"]) ** 2)
-    #
-    # plt.scatter(yield_df.loc[cluster_yield_df.index]["yield_anomaly"], yield_df.loc[cluster_yield_df.index]["y_pred"])
-    # plt.plot([-0.5, 0.5], [-0.5, 0.5], color="red")
-    # plt.xlabel("True yield anomalies")
-    # plt.ylabel("Predicted yield anomalies")
-    # plt.show()
-
     # save predictions and performance
     run.save_predictions(prediction_df=yield_df)
     run.save_performance(prediction_df=yield_df[~(yield_df["y_pred"].isna())], cluster_set=data_split)
 
     # save run
     run.save()
-
-# VISUALIZATION ########################################################################################################

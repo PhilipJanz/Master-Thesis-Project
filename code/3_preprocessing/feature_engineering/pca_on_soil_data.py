@@ -7,8 +7,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
 from config import PROCESSED_DATA_DIR
-from data_loader import load_soil_data, load_yield_data
-from feature_engineering_functions.feature_engineering import make_adm_column
+from data_loader import load_soil_data, load_yield_data, make_adm_column
 
 """
 Applied PCA to reduce dimensionality and correlation in soil data

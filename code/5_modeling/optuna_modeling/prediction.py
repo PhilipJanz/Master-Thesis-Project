@@ -2,18 +2,7 @@ import time
 
 import shap
 from optuna.pruners import ThresholdPruner
-import xgboost as xgb
 from metrics import calc_r2
-
-wait_minutes = 180
-#for i in range(wait_minutes):
-    #print(f"{wait_minutes - i} minutes until the script starts.........", end="\r")
-    #time.sleep(60)
-
-import os
-
-#os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-#os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 from config import BASE_DIR
 import numpy as np
@@ -32,25 +21,21 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)
 #plt.switch_backend('agg')
 
 """
-This script is the final script that brings together all processed data to make groundbreaking yield predictions.
-It searches for the best combination of: predictive model (architecture and hyperparameters), sets of data cluster and feature set
+This script automates the process of crop yield prediction in a nested Leave-One-Year-Out Cross-Validation (LOYOCV). 
 
-To make the code more slim we dont loop over the sets of clusters (all, country, adm, ndvi-cluster, ...)
-This has to be specified in the beginning of the code.
-
-There are two main loops:
-# TODO!
-    2. loop over clusters (eg. single countries)
-        inside the loop a nested-LOYOCV strategy is applied
-        the inner LOYOCV estimates the parameters performance and picks the best hyperparameters and feature set
-        the outer LOYOCV evaluated the best models performance on entirely unseen data
-        the picked hyperparameters and feature set are saved  for later investigation
+Main Components:
+1. Initialization: Sets parameters for the run, including model type, data splits, feature selection thresholds and Optuna tuning parameters.
+2. Data Loading and Preprocessing: Loads yield, feature, and soil data, and selects features based on specified thresholds.
+3. Inference: Conducts LOYOCV to train models and obtain predictions. Optimizes and evaluates models for each cluster and year using Optuna.
+4. Model Training and SHAP Analysis: For each fold, the best model is trained, and SHAP values are calculated for feature interpretability.
+5. Result Saving: Saves predictions, feature importance, SHAP values, model parameters, and performance metrics for each fold.
 """
+
 
 # INITIALIZATION #######################################################################################################
 
 # date of first execution of that run
-date = "2110"
+date = "xxxx"
 
 # define objective (target)
 objective = "yield"
@@ -72,13 +57,13 @@ model_type = "xgb"
 soil_pc_number = 2
 
 # optuna hyperparameter optimization params
-# choose timeout
+# choose timeout (sec) for a single optimization study. This multiplied by the number of years give you the max runtime
 timeout = 600
 # choose duration (sec) of optimization using optuna
 n_trials = 250
 # choose number of optuna startup trails (random parameter search before sampler gets activated)
 n_startup_trials = 100
-# choose a upper limit on loss (mse) for pruning an optuna trial (early stopping due to weak performance)
+# choose an upper limit on loss (mse) for pruning an optuna trial (early stopping due to weak performance)
 pruner_upper_limit = .5
 # folds of optuna hyperparameter search
 num_folds = 5
@@ -92,7 +77,7 @@ yield_df = load_yield_data(benchmark_column=True)
 # load and process features
 processed_feature_df = load_processed_features(feature_file)
 # test if datasets have same row order
-assert np.all(processed_feature_df[["adm"   , "harv_year"]] == yield_df[["adm", "harv_year"]])
+assert np.all(processed_feature_df[["adm", "harv_year"]] == yield_df[["adm", "harv_year"]])
 processed_feature_df = processed_feature_df.drop(['country', 'adm1', 'adm2', 'adm', 'harv_year'], axis=1)
 
 # load feature selection
@@ -136,9 +121,6 @@ else:
 # INFERENCE ############################################################################################################
 
 for split_name, split_yield_df in yield_df.groupby(data_split):
-    #break
-    #if "Tanzania" in cluster_yield_df["country"].values:
-    #    continue
 
     # in case you loaded an existing run, you can skip the clusters already predicted
     if np.all(~split_yield_df["y_pred"].isna()):
@@ -250,20 +232,9 @@ for split_name, split_yield_df in yield_df.groupby(data_split):
         # save predictions and performance
         run.save_predictions(prediction_df=yield_df)
 
-    # break
-    # np.nanmean((yield_df.loc[cluster_yield_df.index]["y_pred"] - yield_df.loc[cluster_yield_df.index]["yield_anomaly"]) ** 2)
-    #
-    # plt.scatter(yield_df.loc[cluster_yield_df.index]["yield_anomaly"], yield_df.loc[cluster_yield_df.index]["y_pred"])
-    # plt.plot([-0.5, 0.5], [-0.5, 0.5], color="red")
-    # plt.xlabel("True yield anomalies")
-    # plt.ylabel("Predicted yield anomalies")
-    # plt.show()
-
     # save predictions and performance
     run.save_predictions(prediction_df=yield_df)
     run.save_performance(prediction_df=yield_df[~(yield_df["y_pred"].isna())], cluster_set=data_split)
 
     # save run
     run.save()
-
-# VISUALIZATION ########################################################################################################

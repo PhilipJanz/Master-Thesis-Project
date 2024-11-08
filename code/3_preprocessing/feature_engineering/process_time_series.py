@@ -9,7 +9,7 @@ from data_loader import load_yield_data, load_my_cc
 from feature_engineering.feature_engineering_functions import process_feature_dict
 
 """
-This script processes features based on feature design.
+This script processes harmonizes multiple time series into a feature matrix customized for CNNs
 """
 
 # INITIALIZATION  ####################################################################################################

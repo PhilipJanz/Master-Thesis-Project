@@ -22,11 +22,15 @@ def get_study_runtime_and_trials(file_path):
         return 0, 0
 
     # Calculate the runtime as the sum of individual trial runtimes
-    total_runtime_seconds = sum(
-        (t.datetime_complete - t.datetime_start).total_seconds()
-        for t in trials
-        if t.datetime_start and t.datetime_complete
-    )
+    # NNs are optimized repreatedly while all others in parallel
+    if "nn" in file_path:
+        total_runtime_seconds = sum(
+            (t.datetime_complete - t.datetime_start).total_seconds()
+            for t in trials
+            if t.datetime_start and t.datetime_complete
+        )
+    else:
+        total_runtime_seconds = (trials[-1].datetime_complete - trials[0].datetime_start).total_seconds()
 
     # Filter out only completed or pruned trials
     num_trials = len(trials)

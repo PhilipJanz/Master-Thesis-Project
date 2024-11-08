@@ -7,6 +7,11 @@ from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR
 from crop_mask.crop_mask_functions import weighted_avg_over_crop_mask
 from maps.map_functions import load_aoi_map, load_grid_data, transform_grid_data, fill_nan_with_neighbors
 
+"""
+Loads & processes ASAP phenology data.
+Not further used in this repository
+"""
+
 # load administrative boundaries with geographic information
 adm_map = load_aoi_map()
 

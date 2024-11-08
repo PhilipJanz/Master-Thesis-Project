@@ -10,7 +10,9 @@ from config import BASE_DIR, PROCESSED_DATA_DIR
 from data_loader import load_yield_data
 
 """
-This script is ...
+This script produces benchmark predictions based on trivial models that only act on the yield time series itself and
+nothing else. This model should represent the best prediction possible without any indicators.
+It is used to compare with other predictive models and to assess their net gain
 """
 
 # INITIALIZATION #######################################################################################################
@@ -74,5 +76,3 @@ bench_rmse = calc_rmse(y_pred=yield_df["y_bench"], y_true=yield_df[objective])
 print(f"Benchmark model '{model_type}' acieves RMSE: {np.round(bench_rmse, 3)}")
 
 yield_df.to_csv(PROCESSED_DATA_DIR / "yield/processed_comb_yield_and_benchmark.csv", index=False)
-
-# VISUALIZATION ########################################################################################################

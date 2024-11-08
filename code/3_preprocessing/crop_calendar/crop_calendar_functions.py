@@ -12,20 +12,9 @@ from crop_calendar.profile_generation import make_profiles
 from maps.map_functions import load_africa_map
 
 
-#from maps.map_functions import load_africa_map
-
-
-def detect_one_season(ndvi_profile):
-    # Get the minimum and maximum NDVI values
-    min_ndvi = ndvi_profile.min()
-    max_ndvi = ndvi_profile.max()
-
-    # Calculate amplitude
-    amplitude = max_ndvi - min_ndvi
-
-    # Define thresholds for the start and end of the season
-    start_threshold = min_ndvi + 0.2 * amplitude
-    end_threshold = max_ndvi - 0.8 * amplitude
+"""
+Collection of functions to define a crop calendar based on vegetation index & threshold approach
+"""
 
 
 def detect_seasons(ndvi_profile, threshold=.25):

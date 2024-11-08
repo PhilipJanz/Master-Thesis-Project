@@ -4,9 +4,10 @@ import pickle
 import numpy as np
 import rasterio
 import geopandas as gpd
+import pandas as pd
 from matplotlib import pyplot as plt
 
-from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR
+from config import SOURCE_DATA_DIR, PROCESSED_DATA_DIR, COUNTRY_COLORS, GRAPHICS_DIR
 from crop_mask.crop_mask_functions import weighted_avg_over_crop_mask, load_worldcereal_crop_mask
 from maps.map_functions import load_aoi_map
 from remote_sensing.rs_functions import custom_rolling_average, fill_missing_values
@@ -146,12 +147,12 @@ months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 
 width = 0.25  # width of the bars
 x = np.arange(len(months))  # the label locations
 
-plt.figure(figsize=(12, 6))
+plt.figure(figsize=(10, 6))
 plt.grid(axis='y')
 alpha = .8
-plt.bar(x - width, tanz_monthly_average_quality, width, label='Tanzania', alpha=alpha)
-plt.bar(x, zamb_monthly_average_quality, width, label='Zambia', alpha=alpha)
-plt.bar(x + width, mala_monthly_average_quality, width, label='Malawi', alpha=alpha)
+plt.bar(x - width, zamb_monthly_average_quality, width, label='Zambia', color=COUNTRY_COLORS["Zambia"])
+plt.bar(x, mala_monthly_average_quality, width, label='Malawi', color=COUNTRY_COLORS["Malawi"])
+plt.bar(x + width, tanz_monthly_average_quality, width, label='Tanzania', color=COUNTRY_COLORS["Tanzania"])
 
 # Add titles and labels
 #plt.title('Monthly Average Quality Ratio of MODIS Images', fontsize=14)
@@ -160,7 +161,7 @@ plt.xticks(x, months)
 
 # Display grid and legend
 plt.legend()
-plt.savefig("modis_quality.pdf", format="pdf")
+plt.savefig(GRAPHICS_DIR / "modis_quality.pdf", format="pdf")
 plt.show()
 
 

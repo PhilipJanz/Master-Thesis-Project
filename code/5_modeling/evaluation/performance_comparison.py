@@ -29,6 +29,8 @@ brr2_ls = []
 for run_name in os.listdir(pred_result_dir):
     if run_name in ["old", "yield"]:
         continue
+    if "31" not in run_name:
+        continue
 
     prediction_df = pd.read_csv(pred_result_dir / f"{run_name}/prediction.csv", keep_default_na=False)
 
@@ -66,5 +68,5 @@ for run_name in os.listdir(pred_result_dir):
     brr2_ls.append(calc_brr2(y_true=prediction_df["yield"], y_pred=prediction_df["y_pred"], y_benchmark=prediction_df["y_bench"]))
 
 pd.set_option('display.max_columns', None)
-overview_df = pd.DataFrame({"run": run_name_ls, "runtime": runtime_ls, "trials": trials_ls,
-                            "rmse": rmse_ls, "r2": r2_ls, "brr2": brr2_ls})
+overview_df = pd.DataFrame({"run": run_name_ls, "runtime": runtime_ls,
+                            "rmse": np.round(rmse_ls, 2), "r2": np.round(r2_ls, 2), "brr2": np.round(brr2_ls, 2)}) # "trials": trials_ls,

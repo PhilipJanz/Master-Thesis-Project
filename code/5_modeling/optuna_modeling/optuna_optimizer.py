@@ -19,8 +19,26 @@ from data_assembly import group_years
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
+"""
+This script provides tools for hyperparameter optimization and model training using various regression models
+(SVR, Random Forest, Lasso, XGBoost) to support tasks such as crop yield prediction.
+
+    - OptunaOptimizer: Manages hyperparameter tuning via Optuna, performing cross-validation to find optimal
+      model parameters based on minimizing mean squared error (MSE).
+
+    - init_model: Initializes regression models ('svr', 'rf', 'lasso', 'xgb') with parameters provided either
+      through an Optuna trial or specified manually.
+
+Usage:
+    1. Use OptunaOptimizer to tune model hyperparameters for best MSE.
+    2. Train the best model found on the dataset.
+"""
+
 
 class GaussianProcess:
+    """
+    The Gaussian process is an alternative model that can be used on deep transfer features as proposed by You et al. (2017)
+    """
     def __init__(self, sigma=1, l_s=0.5, l_t=1.5, noise=0.1, const=0.01):
         # Hyperparameters of the Gaussian process
         self.sigma = sigma
@@ -178,7 +196,7 @@ def init_model(model_name, trial=None, params=None):
 
 class OptunaOptimizer:
     """
-
+    Organises an optuna study, by collecting insights about the data that it will be used on.
     :param X: (n x p)-array
     :param y: (n)-array
     :param years: (n)-array: important since we so 'leave-year-out-CV'

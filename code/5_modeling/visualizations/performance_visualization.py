@@ -11,7 +11,7 @@ from run import open_run
 from visualizations.visualization_functions import plot_performance_map, plot_map, plot_performance_box_x_map
 
 """
-This script unfolds the yield estimation performance by giving metrics for each cluster set and model.
+This script unfolds the yield estimation performance by giving metrics for each model.
 Additionally it plots the performance as map (for each admin) and charts.
 """
 
@@ -22,12 +22,7 @@ Additionally it plots the performance as map (for each admin) and charts.
 pred_result_dir = RESULTS_DATA_DIR / "yield_predictions/"
 print(os.listdir(pred_result_dir))
 
-run_name = '2510_yield_all_cnn_32_60_60_optuna_7200_100_50_5'
-#run = open_run(run_name=run_name)
-#model_dir, params_df, feature_ls_ls = run.load_model_and_params()
-#for i, (name, model) in enumerate(model_dir.items()):
-#    importance = model.feature_importances_
-#    print(name, feature_ls_ls[i][np.argmax(importance)], np.max(importance))
+run_name = '3110_yield_country_internal_transfer_features_from_all_xgb_1200_250_100_5'
 
 prediction_df = pd.read_csv(pred_result_dir / f"{run_name}/prediction.csv") # run.load_prediction()
 prediction_df = prediction_df[(prediction_df["y_pred"] != "") & (~prediction_df["y_pred"].isna())]
@@ -67,8 +62,9 @@ for adm, adm_results_df in prediction_df.groupby("adm"):
     performance_dict["rmse"].append(rmse)
     performance_dict["r2"].append(r2)
     performance_dict["brr2"].append(brr2)
+
     """
-    if "Chipata" in adm: # Chipata pwani
+    if "Balaka" in adm: # Chipata pwani
         fig, ax = plt.subplots()
         ax.plot(adm_results_df["harv_year"], y_true, label="True Yield")
         ax.plot(adm_results_df["harv_year"], adm_results_df["y_bench"], label="Benchmark Prediction")
@@ -76,6 +72,11 @@ for adm, adm_results_df in prediction_df.groupby("adm"):
         ax.text(0.9, 0.05, f"R2: {np.round(r2, 2)}\nBR-R2: {np.round(brr2, 2)}", transform=ax.transAxes, verticalalignment='bottom', horizontalalignment='left')
         plt.legend()
         plt.show()"""
+
+xy = prediction_df[prediction_df.country == "Tanzania"]
+xy["pred_se"] = (xy["y_pred"] - xy["yield"]) ** 2
+xy["bench_se"] = (xy["y_bench"] - xy["yield"]) ** 2
+xy.groupby("harv_year")[["bench_se", "pred_se"]].mean()
 
 """
 fig, ax = plt.subplots(1, 2, figsize=(12, 3))
@@ -118,13 +119,23 @@ print(f"Run '{run_name}' achieved RMSE (BR-R2): {np.round(rmse, 3)} ({np.round(b
 plot_performance_box_x_map(performance_df, metrics=(r2, brr2), save_path=RESULTS_DATA_DIR / f"yield_predictions/{run_name}/plots/overall/box_x_map.pdf")
 
 # plot results as a map
-plot_performance_map(performance_data=performance_df.drop("country", axis=1), performance_column="r2", result_filename=run_name)
-plot_performance_map(performance_data=performance_df.drop("country", axis=1), performance_column="brr2", result_filename=run_name, cmap="RdYlGn")
+#plot_performance_map(performance_data=performance_df.drop("country", axis=1), performance_column="r2", result_filename=run_name)
+#plot_performance_map(performance_data=performance_df.drop("country", axis=1), performance_column="brr2", result_filename=run_name, cmap="RdYlGn")
 
 
-for c, country_df in performance_df.groupby("country"):
-    plt.scatter(country_df["n"], country_df["r2"], color="grey", alpha=0.7, marker=COUNTRY_MARKERS[c], label=c)
-plt.xlabel("Number of data points in region")
-plt.ylabel("NSE")
+pivot_yield_df = prediction_df[prediction_df.country == "Malawi"].pivot(columns="harv_year", values="yield", index="adm2")
+pivot_yield_pred_df = prediction_df[prediction_df.country == "Malawi"].pivot(columns="harv_year", values="y_pred", index="adm2")
+pre_drought_level = pivot_yield_df[[2014, 2013, 2012]].mean(1)
+
+fig = plt.figure(figsize=(6, 5))
+plt.plot([0, 1.5], [0, 1.5], color="grey")
+plt.hlines([1], xmin=0, xmax=1.5, linestyle="--", color="lightgrey")
+plt.vlines([1], ymin=0, ymax=1.5, linestyle="--", color="lightgrey")
+plt.fill_between([0, 1], [1, 1], color="lightgrey", alpha=0.5, label="Correct Shortfall Forecast")
+plt.scatter(pivot_yield_df[2015] / pre_drought_level, pivot_yield_pred_df[2015] / pre_drought_level, label="2014/2015 drought", color="tab:orange")
+plt.scatter(pivot_yield_df[2016] / pre_drought_level, pivot_yield_pred_df[2016] / pre_drought_level, label="2015/2016 drought", color="tab:red")
+plt.xlabel("Actual Relative Yield")
+plt.ylabel("Forecasted Relative Yield")
 plt.legend()
+plt.savefig(RESULTS_DATA_DIR / f"yield_predictions/{run_name}/plots/overall/malawi_drought_detection.pdf", format="pdf")
 plt.show()

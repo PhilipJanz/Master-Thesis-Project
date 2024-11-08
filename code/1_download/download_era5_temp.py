@@ -16,7 +16,7 @@ ee.Authenticate() if it's your first time or if your authentication token has ex
 # Define the geographic range using coordinates of a bounding box
 # Example coordinates for a rectangular area: (min Lon, min Lat, max Lon, max Lat)
 geometry = ee.Geometry.Rectangle(AOI)
-START_DATE = '2011-01-16'
+
 # Load the ERA5-Land dataset
 modis = ee.ImageCollection('ECMWF/ERA5_LAND/DAILY_AGGR').filterDate(START_DATE, END_DATE)
 

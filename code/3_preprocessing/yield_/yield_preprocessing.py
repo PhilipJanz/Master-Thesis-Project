@@ -8,6 +8,12 @@ from yield_.yield_functions import *
 
 from config import *
 
+"""
+This script sources yield data from different sources and applies a cleaning pipeline discribed in 'yield_functions.py'
+It also processed region-level-standardized yield values used in feature selection.
+"""
+
+
 malawi_yield_df = read_malawi_yield()
 malawi_yield_df = clean_pipeline(malawi_yield_df, group_columns=["country", "adm1", "adm2"], plot=False)
 malawi_yield_df.head()
@@ -66,17 +72,8 @@ for adm, adm_yield_df in comb_df.groupby(["country", "adm1", "adm2"]):
     plt.savefig(PROCESSED_DATA_DIR / f"yield/plots/yield_and_trends_{adm}", dpi=300)
     plt.close()
 
-    """
-    # check yield anomaly variance:
-    yield_anomaly_var = np.var(comb_df.loc[adm_yield_df.index, "yield_anomaly"])
-    if yield_anomaly_var < 0.01:
-        print(f"Discard {adm} for negligible yield-anomaly variance of {np.round(yield_anomaly_var, 5)}")
-        comb_df.drop(index=adm_yield_df.index, inplace=True)
-    """
-
 
 #### SAVE ####
-#comb_df = comb_df[comb_df.harv_year > 2001]
 comb_df.to_csv(PROCESSED_DATA_DIR / "yield/processed_comb_yield.csv", index=False)
 
 adm_df = comb_df.groupby(["country", "adm1", "adm2"]).count().reset_index()[["country", "adm1", "adm2"]]
