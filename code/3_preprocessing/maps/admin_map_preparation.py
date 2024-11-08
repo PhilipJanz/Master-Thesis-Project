@@ -3,7 +3,10 @@ import pandas as pd
 import geopandas as gpd
 
 from config import *
+from data_assembly import make_adm_column
+from data_loader import load_yield_data
 from maps.map_functions import merge_regions, plot_region_map
+from visualizations.visualization_functions import plot_map
 
 """
 The following code prepares a geopandas dataframe that delivers geometric data (shapely.geometry.multipolygon.MultiPolygon)
@@ -14,14 +17,17 @@ generating the file available_admin.csv that will be used here.
 
 # 1. read information on areas of interest dependent on yield data availability
 adm_df = pd.read_csv(PROCESSED_DATA_DIR / "yield/available_admin.csv", keep_default_na=False)
+adm_df = make_adm_column(adm_df)
+yield_df = load_yield_data()
 
 # 2. Load shapefiles for selected countries
 # Tanzania provides adm1
 tanzania_map = gpd.read_file(SOURCE_DATA_DIR / 'admin map/tanzania_maps/tza_admbnda_adm1_20181019.shp')
 tanzania_map["country"] = "Tanzania"
 tanzania_map["adm1"] = tanzania_map.ADM1_EN
+tanzania_map.loc[tanzania_map.adm1 == "Dar-es-salaam", "adm1"] = "Dar es Salaam"
 tanzania_map["adm2"] = "None"
-tanzania_map = merge_regions(tanzania_map, column="adm1", regions=["Songwe", "Mbeya"], new_region_name="Mbeya")
+#tanzania_map = merge_regions(tanzania_map, column="adm1", regions=["Songwe", "Mbeya"], new_region_name="Mbeya")
 print("Check the following regions that were not found in the yield data: ", [region for region in tanzania_map.adm1.values if region not in adm_df.adm1.values])
 
 """
@@ -103,7 +109,7 @@ zambia_map = merge_regions(zambia_map, column="adm2", regions=["Mwansabombwe", "
 zambia_map = merge_regions(zambia_map, column="adm2", regions=["Chilanga", "Kafue"], new_region_name="Kafue") # 2012
 zambia_map = merge_regions(zambia_map, column="adm2", regions=["Chirundu", "Siavonga"], new_region_name="Siavonga") # 2012
 zambia_map = merge_regions(zambia_map, column="adm2", regions=["Rufunsa", "Chongwe"], new_region_name="Chongwe") # 2012
-zambia_map = merge_regions(zambia_map, column="adm2", regions=["Shibuyunji", "Lusaka"], new_region_name="Lusaka") # 2012
+zambia_map = merge_regions(zambia_map, column="adm2", regions=["Shibuyunji", "Mumbwa"], new_region_name="Mumbwa") # 2012
 zambia_map = merge_regions(zambia_map, column="adm2", regions=["Kanchibiya", "Lavushimanda", "Mpika"], new_region_name="Mpika") # 2017
 zambia_map = merge_regions(zambia_map, column="adm2", regions=["Ikelenge", "Mwinilunga"], new_region_name="Mwinilunga") # 2011
 zambia_map = merge_regions(zambia_map, column="adm2", regions=["Manyinga", "Kabompo"], new_region_name="Kabompo") # 2012
@@ -130,6 +136,7 @@ zambia_map.loc[zambia_map.adm2 == "Milengi", "adm2"] = "Milenge"
 zambia_map.loc[zambia_map.adm2 == "Chiengi", "adm2"] = "Chienge"
 zambia_map.loc[zambia_map.adm2 == "Itezhi-tezhi", "adm2"] = "Itezhi-Tezhi"
 zambia_map.loc[zambia_map.adm2 == "Itezhi-Tezhi", "adm1"] = "Southern"
+zambia_map.loc[zambia_map.adm2 == "Mumbwa", "adm1"] = "Central"
 print([region for region in zambia_map.adm2.values if region not in adm_df.adm2.values])
 
 
@@ -144,3 +151,8 @@ plot_region_map(region_map=comb_map, save_path=PROCESSED_DATA_DIR / "admin map/p
 
 # save geodata
 comb_map.to_file(PROCESSED_DATA_DIR / "admin map/comb_map.shp", index=False)
+
+# plot number of yield datapoints
+yield_count_df = yield_df.groupby("adm")["country"].count().reset_index(name="Number of datapoints")
+plot_map(df=yield_count_df, column="Number of datapoints", cmap="YlGn",
+         cmap_range=(0, 25), country_annotation=True, save_path=PROCESSED_DATA_DIR / "admin map/plots/yield_data_count.png")

@@ -55,6 +55,7 @@ def read_ethiopia_yield():
     print(f"Loaded {len(ethiopia_yield_df)} yield datapoints for Ethiopia.")
     return ethiopia_yield_df
 
+
 def read_malawi_yield():
     """
     Read raw yield data for Malawi
@@ -90,6 +91,68 @@ def read_malawi_yield():
     print(f"Loaded {len(malawi_yield_df)} yield datapoints for Malawi.")
     return malawi_yield_df
 
+
+def read_argentina_yield():
+    """
+    Read raw yield data for Argentina
+    :return: yield df
+    """
+    argen_yield_df = pd.read_csv(SOURCE_DATA_DIR / "yield/FEWS NET/maize_yield_argentina.csv")
+    # filtering irrigation season and others
+    argen_yield_df = argen_yield_df.rename(columns={"admin_1": "adm1", "admin_2": "adm2", "season_name": "season"})
+    argen_yield_df["harv_year"] = [int(date[:4]) for date in argen_yield_df.start_date]
+    argen_yield_df = argen_yield_df[["country", 'adm1', 'adm2', 'season', 'harv_year', 'indicator', 'value']]
+    #print(len(malawi_yield_df))
+    # drop duplicates
+    argen_yield_df = argen_yield_df.drop_duplicates()
+    #print(len(malawi_yield_df))
+    # if duplicates are found by leaving out the value, those duplicates have unequal values are have to be discarded
+    duplicates = argen_yield_df.duplicated(subset=['country', 'adm1', 'adm2', 'season', 'harv_year', 'indicator'], keep=False)
+    if any(duplicates):
+        print(f"{sum(duplicates) / 6} duplicates found")
+        duplicate_df = argen_yield_df[duplicates]
+        # Keep only the rows that are not duplicates
+        argen_yield_df = argen_yield_df[~duplicates]
+    argen_yield_df = argen_yield_df.pivot(index=['country', 'adm1', 'adm2', 'season', 'harv_year'],
+                                          columns='indicator', values='value').reset_index()
+    argen_yield_df = argen_yield_df.rename(columns={"Area Planted": "area", "Quantity Produced": "production", "Yield": "yield"})
+    argen_yield_df = argen_yield_df.dropna()
+    print(f"Loaded {len(argen_yield_df)} yield datapoints for Argentina.")
+    return argen_yield_df
+
+
+def read_zambia_yield():
+    """
+    Read raw yield data for Zambia
+    :return: yield df
+    """
+    raw_yield_df = pd.read_csv(SOURCE_DATA_DIR / "yield/FEWS NET/maize_yield_south_africa.csv")#, header=None)
+    zambia_yield_df = raw_yield_df[raw_yield_df.country == "Zambia"].copy()
+    #print(len(zambia_yield_df))
+    # filtering irrigation season and others
+    #zambia_yield_df = zambia_yield_df[zambia_yield_df.crop_production_system.isin(["all"])]
+    zambia_yield_df = zambia_yield_df.rename(columns={"admin_1": "adm1", "admin_2": "adm2", "season_name": "season"})
+    zambia_yield_df["harv_year"] = [int(date[:4]) for date in zambia_yield_df.season_date]
+    zambia_yield_df = zambia_yield_df[["country", 'adm1', 'adm2', 'season', 'harv_year', 'indicator', 'value']]
+    # drop duplicates
+    zambia_yield_df = zambia_yield_df.drop_duplicates()
+    #print(len(zambia_yield_df))
+    # if duplicates are found by leaving out the value, those duplicates have unequal values are have to be discarded
+    duplicates = zambia_yield_df.duplicated(subset=['country', 'adm1', 'adm2', 'season', 'harv_year', 'indicator'], keep=False)
+    if any(duplicates):
+        print(f"{sum(duplicates) / 6} duplicates found")
+        duplicate_df = zambia_yield_df[duplicates]
+        # Keep only the rows that are not duplicates
+        zambia_yield_df = zambia_yield_df[~duplicates]
+    #print(len(malawi_yield_df))
+    zambia_yield_df = zambia_yield_df.pivot(index=['country', 'adm1', 'adm2', 'season', 'harv_year'],
+                                            columns='indicator', values='value').reset_index()
+    zambia_yield_df = zambia_yield_df.rename(columns={"Area Planted": "area", "Quantity Produced": "production", "Yield": "yield"})
+    zambia_yield_df = zambia_yield_df.dropna()
+    print(f"Loaded {len(zambia_yield_df)} yield datapoints for Zambia.")
+    return zambia_yield_df
+
+
 def read_kenya_and_zambia_yield():
     """
     Read raw yield data for Kenya and Zambia
@@ -124,6 +187,7 @@ def read_kenya_and_zambia_yield():
     yield_df = yield_df.dropna()
     print(f"Loaded {len(yield_df)} yield datapoints for Kenya & Zambia.")
     return yield_df
+
 
 def read_tanzania_yield():
     """
@@ -261,6 +325,7 @@ def detect_suspicious_data(data, column, threshold=0.0001, plot=False):
 
     return suspicious_df
 
+
 def is_close(a, b, rel_tol=0.01):
     """
     Determines if two values are relatively close
@@ -270,6 +335,7 @@ def is_close(a, b, rel_tol=0.01):
     :return: (bool) is close
     """
     return abs(a-b) <= rel_tol * max(abs(a), abs(b))
+
 
 def my_merge(df1, df2, on, rel_tol=0.01):
     """
@@ -311,14 +377,16 @@ def my_merge(df1, df2, on, rel_tol=0.01):
         print(f"Datapoints after merge: {len(merged_df)} (both: {n_consistency}, df1: {len(index1) - n_consistency}, df2: {len(index2)})")
     return merged_df
 
+
 def clean_pipeline(yield_df,
-                   group_columns = ["country", "adm1", "adm2", "season"],
-                   min_area = 1000,
-                   max_yield = 10,
-                   min_datapoints = 7,
+                   group_columns=["country", "adm1", "adm2", "season"],
+                   min_area=1000,
+                   max_yield=10,
+                   min_datapoints=4,
                    plot=False
                    ):
     """
+    Takes a yield dataset and applies an array of filter methods to discard data that would distort the analysis.
 
     :param yield_df: dataframe with yield information
     :param group_columns: group columns for which each individual has only one yield value per year
@@ -332,31 +400,39 @@ def clean_pipeline(yield_df,
 
     # 1. Check if yield, production and area are consistent
     yield_values = yield_df["yield"].copy()
-    yield_df["yield"] = (yield_df["production"] / yield_df.area)
+    yield_df["yield"] = (yield_df["production"] / yield_df["area"])
     yield_inconsistencies = abs(yield_df["yield"] - yield_values) >= 0.05
-    if sum(yield_inconsistencies) > 0:
+    if any(yield_inconsistencies):
         print(f"Found {sum(yield_inconsistencies)} yield inconsistencies. Check them out: yield_inconsistency_df")
         yield_inconsistency_df = yield_df[yield_inconsistencies]
         yield_inconsistency_df["yield_in_database"] = yield_values[yield_inconsistencies]
         yield_df = yield_df[~yield_inconsistencies]
 
+    """
     # 2. filter crisis events like political instability
     yield_df = yield_df[~((yield_df.country == "Kenya") & (yield_df.harv_year == 1993))] # post-election crisis
     yield_df = yield_df[~((yield_df.country == "Kenya") & (yield_df.harv_year == 2008))] # 2007–2008 Kenyan crisis
     yield_df = yield_df[~((yield_df.country == "Kenya") & (yield_df.harv_year == 2009))] # 2007–2008 Kenyan crisis
+    """
 
-    # 3.1 filter based on avg planted area:
+    # 2.1 filter based on avg planted area:
     avg_df = yield_df.groupby(group_columns).mean("area").reset_index()
     for _, row in avg_df[avg_df.area < min_area].iterrows():
         too_small = np.all(yield_df[group_columns] == row[group_columns], axis=1)
         yield_df = yield_df[~too_small]
         print(f"Discard {sum(too_small)} datapoints from ({row[group_columns].values}) due to avg planted area of {round(row.area)}ha")
 
-    # 3.2 filter based on planted area for each datapoint
+    # 2.2 filter based on planted area for each datapoint
     too_small = yield_df.area < min_area
     print(f"Discard {sum(too_small)} datapoints from due to small planted area (of <{min_area}ha)")
     yield_df = yield_df[~too_small]
 
+    # 3. filter unrealistic high yields (before outlier detection since they distort the search with high variance)
+    unrealistic_yield = yield_df["yield"] >= max_yield
+    if sum(unrealistic_yield):
+        print(f"Discard {sum(unrealistic_yield)} datapoints with unrealistic yields (>= {max_yield} t/ha)")
+        yield_df = yield_df[~unrealistic_yield]
+    """
     # 4. filter suspicious data (consecutive equal values)
     for group, group_df in yield_df.groupby(group_columns):
         sus_df = detect_suspicious_data(group_df, column="yield", threshold=1e-3, plot=False)
@@ -364,14 +440,8 @@ def clean_pipeline(yield_df,
             detect_suspicious_data(group_df, column="yield", threshold=1e-3, plot=plot)
             print(f"Discard {len(sus_df)} suspicious 'yield'-values from {group}.")
             yield_df = yield_df.drop(index=sus_df.index)
-
-    # 5. filter unrealistic high yields (before outlier detection since they distort the search with high variance)
-    unrealistic_yield = yield_df["yield"] >= max_yield
-    if sum(unrealistic_yield):
-        print(f"Discard {sum(unrealistic_yield)} datapoints with unrealistic yields (>= {max_yield} t/ha)")
-        yield_df = yield_df[~unrealistic_yield]
-
-    # 6.1 filter outliers in the planted area based on Z-scores and 3-sigma margin
+    """
+    # 5.1 filter outliers in the planted area based on Z-scores and 3-sigma margin
     for group, group_df in yield_df.groupby(group_columns):
         outlier_df = detect_outliers_with_polyfit(group_df, column="area", plot=False)
         if len(outlier_df) > 0:
@@ -379,7 +449,7 @@ def clean_pipeline(yield_df,
             print(f"Discard {len(outlier_df)} outliers in 'area' from {group} with Z-scores of {outlier_df.z_score.values}")
             yield_df = yield_df.drop(index=outlier_df.index)
 
-    # 6.2 filter outliers in yield based on Z-scores and 3-sigma margin
+    # 5.2 filter outliers in yield based on Z-scores and 3-sigma margin
     for group, group_df in yield_df.groupby(group_columns):
         outlier_df = detect_outliers_with_polyfit(group_df, column="yield", plot=False)
         if len(outlier_df) > 0:
@@ -389,7 +459,7 @@ def clean_pipeline(yield_df,
                 print(f"Discard {len(outlier_df)} outliers in 'yield' from {group} with Z-scores of {outlier_df.z_score.values}")
                 yield_df = yield_df.drop(index=outlier_df.index)
 
-    # 7. filter regions with few datapoints
+    # 6. filter regions with few datapoints
     count_datapoints = yield_df.groupby(group_columns).count().reset_index()
     for _, row in count_datapoints[count_datapoints["yield"] < min_datapoints].iterrows():
         too_little_data = np.all(yield_df[group_columns] == row[group_columns], axis=1)
@@ -402,11 +472,11 @@ def clean_pipeline(yield_df,
 def clean_pipeline_yield(yield_df,
                          group_columns=["country", "adm1", "adm2", "season"],
                          max_yield=10,
-                         min_datapoints = 7,
+                         min_datapoints=7,
                          plot=False
                          ):
     """
-
+    Similar to clean_pipeline() for yield dataset without harvest area information (so only regarding yield values)
     :param yield_df: dataframe with yield information
     :param group_columns: group columns for which each individual has only one yield value per year
     :param max_yield: filter yield with more than this

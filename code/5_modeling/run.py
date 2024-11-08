@@ -21,17 +21,23 @@ def open_run(run_name):
 
 
 class Run:
+    """
+    A run organizes a single modeling approach, that aims to predict on all data.
+    Next to the optuna optimization studies it saves models, shap values, plots and so on.
+    """
     def __init__(self,
                  name,
+                 objective,
                  cluster_set,
-                 model_types,
+                 model_type,
                  timeout,
                  n_trials,
                  n_startup_trials,
                  python_file):
         self.name = name
+        self.objective = objective
         self.cluster_set = cluster_set
-        self.model_types = model_types
+        self.model_type = model_type
         self.timeout = timeout
         self.n_trials = n_trials
         self.n_startup_trials = n_startup_trials
@@ -54,6 +60,8 @@ class Run:
         os.mkdir(run_dir / "models")
         os.mkdir(run_dir / "params")
         os.mkdir(run_dir / "optuna_studies")
+        os.mkdir(run_dir / "shap")
+        os.mkdir(run_dir / "feature_importance")
         os.mkdir(run_dir / "plots")
         os.mkdir(run_dir / "plots/regional")
         os.mkdir(run_dir / "plots/overall")
@@ -91,9 +99,9 @@ class Run:
 
             performance_dict["avg_opt_trials"].append(np.mean(adm_prediction_df["n_opt_trials"]))
             performance_dict["avg_train_mse"].append(np.mean(adm_prediction_df["train_mse"]))
-            mse = np.mean((adm_prediction_df["y_pred"] - adm_prediction_df["yield_anomaly"]) ** 2)
+            mse = np.mean((adm_prediction_df["y_pred"] - adm_prediction_df[self.objective]) ** 2)
             performance_dict["mse"].append(mse)
-            performance_dict["nse"].append(1 - mse / np.var(adm_prediction_df["yield_anomaly"]))
+            performance_dict["nse"].append(1 - mse / np.var(adm_prediction_df[self.objective]))
 
         # save it
         pd.DataFrame(performance_dict).to_csv(self.run_dir / "performance.csv", index=False)
@@ -144,9 +152,9 @@ class Run:
         performance_dict = {"cluster_name": [], "year": [], "mse": [], "nse": []}
         for adm_year, adm_year_results_df in result_df.groupby(["adm1_", "harv_year"]):
 
-            mse = np.mean((adm_year_results_df["y_pred"] - adm_year_results_df["yield_anomaly"]) ** 2)
+            mse = np.mean((adm_year_results_df["y_pred"] - adm_year_results_df[self.objective]) ** 2)
 
-            nse = 1 - mse / np.mean(adm_year_results_df["yield_anomaly"] ** 2)
+            nse = 1 - mse / np.mean(adm_year_results_df[self.objective] ** 2)
 
             # fill dict
             performance_dict["cluster_name"].append(adm_year[0])
@@ -198,14 +206,25 @@ class Run:
 
         return params_df, feature_ls_ls
 
-    def save_model_and_params(self, name, model, params, model_type):
+    def save_shap(self, name, explainer, shap_data):
+        # save explainer
+        with open(self.run_dir / f"shap/{name}_explainer.pkl", 'wb') as f:
+            # Pickle using the highest protocol available.
+            pickle.dump(explainer, f, pickle.HIGHEST_PROTOCOL)
+
+        # save the shap values
+        with open(self.run_dir / f"shap/{name}_shap_data.pkl", 'wb') as f:
+            # Pickle using the highest protocol available.
+            pickle.dump(shap_data, f, pickle.HIGHEST_PROTOCOL)
+
+    def save_model_and_params(self, name, model, params):
         # save params dict
         with open(self.run_dir / f"params/{name}.pkl", 'wb') as f:
             # Pickle using the highest protocol available.
             pickle.dump(params, f, pickle.HIGHEST_PROTOCOL)
 
         # save the model
-        if model_type in ["nn", "lstm"]:
+        if self.model_type in ["nn", "lstm"]:
             model.save(self.run_dir / f"models/{name}.keras")
         else:
             with open(self.run_dir / f"models/{name}.pkl", 'wb') as f:

@@ -6,6 +6,12 @@ from scipy.optimize import curve_fit
 
 from config import PROCESSED_DATA_DIR
 
+"""
+Collect functions to estimate profiles on temperature, precipitaiton or NDVI. 
+It gives the average value for each day of the year.
+Can be used to detect anomalies or determine crop calendar.
+"""
+
 
 def make_profiles(data_df):
     # detect value columns in dataframes and save day of year for fitting later

@@ -29,7 +29,7 @@ def load_soilgrid(target_crs, target_width, target_height):
     soil_nutrient_maps = []
     for soilgrids_filename in soilgrids_filenames:
         # extract soil nutrient
-        soil_nutrients.append(soilgrids_filename.split("_")[0])
+        soil_nutrients.append(soilgrids_filename.split(".")[0])
         # loas data and reshape
         with rasterio.open(soilgrids_path / soilgrids_filename) as soil_src:
             soil_nutrient_map = soil_src.read(

@@ -12,10 +12,17 @@ from crop_calendar.profile_generation import make_profiles
 from maps.map_functions import load_africa_map
 
 
-#from maps.map_functions import load_africa_map
+"""
+Collection of functions to define a crop calendar based on vegetation index & threshold approach
+"""
 
 
-def detect_one_season(ndvi_profile):
+def detect_seasons(ndvi_profile, threshold=.25):
+    # Detect local maxima
+    maxima_indices, _ = find_peaks(ndvi_profile)
+    # Detect local minima by inverting the NDVI data
+    minima_indices, _ = find_peaks(-ndvi_profile)
+
     # Get the minimum and maximum NDVI values
     min_ndvi = ndvi_profile.min()
     max_ndvi = ndvi_profile.max()
@@ -24,56 +31,42 @@ def detect_one_season(ndvi_profile):
     amplitude = max_ndvi - min_ndvi
 
     # Define thresholds for the start and end of the season
-    start_threshold = min_ndvi + 0.2 * amplitude
-    end_threshold = max_ndvi - 0.8 * amplitude
+    ndvi_threshold = min_ndvi + threshold * amplitude
 
+    # find sos & eos
+    sos = find_sos(ndvi_profile, ndvi_threshold)
+    eos = find_eos(ndvi_profile, ndvi_threshold)
 
-
-def detect_seasons(ndvi_profile):
-    # Detect local maxima
-    maxima_indices, _ = find_peaks(ndvi_profile)
-    # Detect local minima by inverting the NDVI data
-    minima_indices, _ = find_peaks(-ndvi_profile)
-
-    if True: #len(maxima_indices) == 1:
-        # Get the minimum and maximum NDVI values
-        min_ndvi = ndvi_profile.min()
-        max_ndvi = ndvi_profile.max()
-
-        # Calculate amplitude
-        amplitude = max_ndvi - min_ndvi
-
-        # Define thresholds for the start and end of the season
-        start_threshold = min_ndvi + 0.25 * amplitude
-        end_threshold = max_ndvi - 0.75 * amplitude
-
-        # find sos & eos
-        sos = find_sos(ndvi_profile, start_threshold)
-        eos = find_eos(ndvi_profile, end_threshold)
-
-        return sos, eos
-
+    return sos, eos
 
 
 def find_sos(ndvi_window, start_threshold):
-    # make a list of values above threshold
-    above_threshold = ndvi_window > start_threshold
+    # move from the minimum until SOS is found
+    moving_point = np.argmin(ndvi_window) + 1
 
-    # find the first value above threshold
-    first_above_threshold = np.where(above_threshold[1:] * ~above_threshold[:-1])[0][0] + 1
-
-    # plus 1 because we want the day of the year (starts with 1)
-    return first_above_threshold + 1
+    while True:
+        # if ndvi point exceeds the start threshold it is the SOS
+        if ndvi_window[moving_point] > start_threshold:
+            return moving_point + 1
+        # set next step
+        moving_point += 1
+        if moving_point == 365:
+            moving_point = 0
 
 
 def find_eos(ndvi_window, end_threshold):
-    # make a list of values below threshold
-    below_threshold = ndvi_window < end_threshold
+    # move from the minimum until EOS is found
+    moving_point = np.argmin(ndvi_window) - 1
 
-    # find the first value above threshold
-    first_below_threshold = np.where(below_threshold[1:] * ~below_threshold[:-1])[0][0] + 1
-
-    return first_below_threshold
+    while True:
+        # if ndvi point exceeds the start threshold it is the day before EOS
+        if ndvi_window[moving_point] > end_threshold:
+            # + 2 comes because moving_point is index (starting at 0) and the day before EOS
+            return moving_point + 2
+        # set next step
+        moving_point -= 1
+        if moving_point == -1:
+            moving_point = 364
 
 
 def copy_cc(cc_df, column, from_name, to_name):
@@ -162,7 +155,7 @@ def plot_my_crop_calendar(cc_df):
     cbar.set_ticks(ticks[(ticks >= vmin) & (ticks <= vmax)])
     cbar.set_ticklabels(ticklabels[(ticks >= vmin) & (ticks <= vmax)])
     # Save plot if wanted
-    plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/MY/my_cc_sos_eos.jpg", dpi=1500)
+    plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/maps/my_cc_sos_eos.pdf", format="pdf")
     plt.show()
 
 
@@ -191,7 +184,7 @@ def plot_season_length(cc_df):
     cbar = fig.colorbar(sm, ax=ax,  fraction=0.02, pad=0.04)
 
     # Save plot if wanted
-    plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/MY/my_cc_season_length.jpg", dpi=900)
+    plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/maps/my_cc_season_length.jpg", dpi=900)
     plt.show()
 
 
@@ -236,7 +229,7 @@ def get_day_of_year(date_str):
     return day_of_year
 
 
-def make_cc(asap_cc_df, ndvi_df, preci_df, plot):
+def make_cc(fao_cc_df, ndvi_df, preci_df, threshold=.25, plot=False):
     # detect value columns in dataframes and save day of year for fitting later
     ndvi_value_columns = [column for column in ndvi_df.columns if column[:4].isdigit()]
     ndvi_day_of_year = [get_day_of_year(date) for date in ndvi_value_columns]
@@ -251,61 +244,73 @@ def make_cc(asap_cc_df, ndvi_df, preci_df, plot):
     sos_ls = []
     eos_ls = []
 
+    regions_exceeding_fao_cc = []
+
     for i, (ndvi_profile, preci_profile) in enumerate(zip(ndvi_profile_mtx, preci_profile_mtx)):
         # extract CC name and region
-        region_cc = asap_cc_df[np.all(asap_cc_df.iloc[:, :3].isin(ndvi_df.values[i, :3]), 1)]
+        region_cc = fao_cc_df[fao_cc_df["adm"] == ndvi_df.iloc[i].adm]
         region_name = str(ndvi_df.values[i, :3]).replace('"', '').replace("'None' ", "").replace("/", "-")
-        print(region_name)
 
         # extract values
         ndvi_values = ndvi_df[ndvi_value_columns].values[i]
         preci_values = preci_df[preci_value_columns].values[i].astype(dtype="float")
 
         # estimate sos, eos
-        sos, eos = detect_seasons(ndvi_profile)
+        sos, eos = detect_seasons(ndvi_profile, threshold=threshold)
         sos_ls.append(sos)
         eos_ls.append(eos)
 
+        # note if eos is beyond FAO crop calendars harvest periode
+        if eos > region_cc.values[0, -1]:
+            regions_exceeding_fao_cc.append(region_name)
+
         if plot:
             #fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(9, 8), sharex=True)
+            # fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(9, 8), sharex=True)
             fig = plt.figure(figsize=(9, 8))
-            gs = gridspec.GridSpec(3, 1, height_ratios=[2, 3, 2])
+            gs = gridspec.GridSpec(3, 1, height_ratios=[2, 3, 1])
 
             ax1 = fig.add_subplot(gs[0])
             ax2 = fig.add_subplot(gs[1])
             ax3 = fig.add_subplot(gs[2])
-            ax1.scatter(preci_day_of_year, preci_values, alpha=0.4)
-            ax1.plot(np.arange(1, 366), preci_profile, linewidth=3, color="tab:orange", label="Fourier approximation (N=5)")
+            ax1.scatter(preci_day_of_year, preci_values, alpha=0.2)
+            ax1.plot(np.arange(1, 366), preci_profile, linewidth=3, color="tab:orange",
+                     label="Fourier approximation (N=5)")
             ax1.set_ylabel("Precipitation (mm)")
             ax1.legend()
 
-            ax2.scatter(ndvi_day_of_year, ndvi_values, color="tab:green", alpha=0.4)
-            ax2.plot(np.arange(1, 366), ndvi_profile, linewidth=3, color="tab:orange", label="Fourier approximation (N=5)")
-            ax2.vlines(x=[sos, eos], ymin=min(ndvi_values), ymax=max(ndvi_values),
+            ax2.scatter(ndvi_day_of_year, ndvi_values, color="tab:green", alpha=0.3)
+            ax2.plot(np.arange(1, 366), ndvi_profile, linewidth=3, color="tab:orange",
+                     label="Fourier approximation (N=5)")
+            ax2.vlines(x=[sos], ymin=min(ndvi_values), ymax=max(ndvi_values),
+                       alpha=.6,
                        linestyles="dotted",
                        color="tab:red",
-                       label="My CC")
+                       label="Start of Season")
+            ax2.vlines(x=[eos], ymin=min(ndvi_values), ymax=max(ndvi_values),
+                       alpha=.6,
+                       linestyles="dashed",
+                       color="tab:red",
+                       label="End of Season")
             ax2.set_ylabel("NDVI")
             ax2.legend()
 
-            for j, (ix, row) in enumerate(region_cc.iterrows()):
-                # Define the data (start_dekade, end_dekade)
-                seasons_data = [(row.sos_s, row.sos_e), (row.sos_e, row.eos_s), (row.eos_s, row.eos_e)]
+            interval_names = ["Planting", "Harvest"]
+            interval_doys = [(region_cc.values[0, -4], region_cc.values[0, -3]),
+                             (region_cc.values[0, -2], region_cc.values[0, -1])]
 
-                # height
-                height = j + 0.3
-
-                # Plot each season as a rectangle
-                for i, ((start, end), color) in enumerate(zip(seasons_data, ["brown", "green", "orange"])):
-                    if start < end:
-                        rect = Rectangle((start, height), end - start, 0.4, color=color, alpha=0.5)
-                        ax3.add_patch(rect)
-                    else:
-                        rect1 = Rectangle((start, height), 365 - start, 0.4, color=color, alpha=0.5)
-                        ax3.add_patch(rect1)
-                        rect2 = Rectangle((0, height), end, 0.4, color=color, alpha=0.5)
-                        ax3.add_patch(rect2)
-                    ax3.text(-50, height, row.season)
+            # Plot each season as a rectangle
+            for i, (name, (start, end), color) in enumerate(zip(interval_names, interval_doys, ["brown", "green"])):
+                height = i * .4 + .1
+                if start < end:
+                    rect = Rectangle((start, height), end - start, 0.3, color=color, alpha=0.5)
+                    ax3.add_patch(rect)
+                else:
+                    rect1 = Rectangle((start, height), 365 - start, 0.3, color=color, alpha=0.5)
+                    ax3.add_patch(rect1)
+                    rect2 = Rectangle((0, height), end, 0.2, color=color, alpha=0.5)
+                    ax3.add_patch(rect2)
+                ax3.text(-50, height, name)
 
             # Set the limits of the plot
             ax3.set_ylim(0, len(region_cc))
@@ -317,12 +322,16 @@ def make_cc(asap_cc_df, ndvi_df, preci_df, plot):
             ax2.set_xlim(-10, 375)
             ax3.set_xlim(-10, 375)
 
-            fig.suptitle(f"Crop Calendar (CC) estimation based on NDVI profile for '{region_name}'\nwith ASAP CC for comparison")
-            plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/profiles/profile_{region_name}",
-                        dpi=300)
+            #fig.suptitle(
+            #    f"Crop Calendar (CC) estimation based on NDVI profile for '{region_name}'\nwith FAO CC for comparison")
+            plt.savefig(PROCESSED_DATA_DIR / f"crop calendar/plots/profiles/profile_{region_name}.pdf",
+                        format="pdf")
             plt.close(fig)
         #plt.show()
         #break
+
+    if regions_exceeding_fao_cc:
+        print(len(regions_exceeding_fao_cc), " region's eos exceed the FAO harvest periode: ", regions_exceeding_fao_cc)
 
     return sos_ls, eos_ls
 

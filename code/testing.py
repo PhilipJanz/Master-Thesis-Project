@@ -1,6 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+"""
+This is a dirty testing script for whatever is in production 
+"""
+
 opti_alpha = np.exp(np.mean(np.log(best_alphas))) # np.median(best_alphas) # opti.best_params["alpha"]
 alphas = np.exp(np.arange(-20.8, 0, 0.2))
 
@@ -184,12 +188,14 @@ nse = 1 - np.nanmean((preds_ - y_) ** 2) / np.mean(y_ ** 2)
 print(f"{cluster_name} finished with: NSE = {np.round(nse, 2)}")
 
 
+##################################################################
 
 import os
 
 import numpy as np
 import pandas as pd
 
+from metrics import calc_rmse, calc_r2, calc_brr2
 from config import RESULTS_DATA_DIR
 
 """
@@ -206,10 +212,10 @@ print(os.listdir(pred_result_dir))
 
 run_name_ls = []
 rmse_ls = []
-avg_nse_ls = []
+avg_r2_ls = []
 n_adm_ls = []
-num_nse_above0_ls = []
-num_nse_above03_ls = []
+num_r2_above0_ls = []
+num_r2_above03_ls = []
 for run_name in os.listdir(pred_result_dir):
     if run_name in ["old", "yield"]:
         continue
@@ -229,32 +235,109 @@ for run_name in os.listdir(pred_result_dir):
     result_df = yield_df[yield_df["y_pred"] != ""]
     result_df["y_pred"] = pd.to_numeric(result_df["y_pred"])
 
-    performance_dict = {"adm": [], "mse": [], "nse": []}
+    performance_dict = {"adm": [], "rmse": [], "r2": []}
     for adm, adm_results_df in result_df.groupby("adm"):
         y_true = adm_results_df[objective]
-        mse = np.mean((adm_results_df["y_pred"] - adm_results_df[objective]) ** 2)
 
-        if objective == "yield_anomaly":
-            nse = 1 - mse / np.mean(y_true ** 2)
-        else:
-            nse = 1 - mse / np.mean((y_true - np.mean(y_true)) ** 2)
+        rmse = calc_rmse(y_true=y_true, y_pred=adm_results_df["y_pred"])
+
+        r2 = calc_r2(y_true=y_true, y_pred=adm_results_df["y_pred"])
+        #brr2 = calc_brr2(y_true=y_true, y_pred=adm_results_df["y_pred"], y_benchmark=)
 
         # fill dict
         performance_dict["adm"].append(adm)
-        performance_dict["mse"].append(mse)
-        performance_dict["nse"].append(nse)
+        performance_dict["rmse"].append(rmse)
+        performance_dict["r2"].append(r2)
+        #performance_dict["brr2"].append(brr2)
 
     performance_df = pd.DataFrame(performance_dict)
 
     run_name_ls.append(run_name)
     rmse_ls.append(np.sqrt(np.mean((result_df["y_pred"] - result_df[objective]) ** 2)))
-    avg_nse_ls.append(np.mean(performance_df["nse"]))
+    avg_r2_ls.append(np.mean(performance_df["r2"]))
     n_adm_ls.append(len(performance_df))
-    num_nse_above0_ls.append(np.sum(performance_df["nse"] > 0))
-    num_nse_above03_ls.append(np.sum(performance_df["nse"] > 0.3))
+    num_r2_above0_ls.append(np.sum(performance_df["r2"] > 0))
+    num_r2_above03_ls.append(np.sum(performance_df["r2"] > 0.3))
 
 pd.set_option('display.max_columns', None)
-overview_df = pd.DataFrame({"run": run_name_ls, "rmse": rmse_ls, "avg_nse": avg_nse_ls,
+overview_df = pd.DataFrame({"run": run_name_ls, "rmse": rmse_ls, "avg_r2": avg_r2_ls,
                             "n_adm": n_adm_ls,
-                            "num_nse_above0": num_nse_above0_ls,
-                            "num_nse_above03": num_nse_above03_ls})
+                            "num_r2_above0": num_r2_above0_ls,
+                            "num_r2_above03": num_r2_above03_ls})
+
+##################################################################
+
+xy = split_yield_df[year_out_bool]
+np.where(xy.adm1 == "Shinyanga")[-1][-1]
+shap.plots.waterfall(explainer(X_test_)[20], max_display=10)
+X_test_ = pd.DataFrame(X_test, columns=remaining_features)
+xyc = yield_df[yield_df.adm1 == "Shinyanga"]
+
+# Create the plot
+fig, ax = plt.subplots()
+
+# Hide the top and right spines (outline)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+plt.plot(xyc["harv_year"], xyc["yield"], color="grey", label="True Yield")
+plt.plot(xyc["harv_year"], xyc["y_pred"], color="tab:orange", label="Yield Prediction")
+plt.legend()
+plt.ylabel("Yield (T/ha)")
+ax.grid(True, which='major', linestyle='--', linewidth=0.5, color='gray', alpha=0.3)  # Enable the grid
+
+#plt.savefig("example_predicion.svg")
+plt.show()
+
+
+
+#################################################################
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+from data_loader import load_yield_data, load_timeseries_features
+feature_file = "32_60_60"
+timeseries_feature_ndarray, feature_names, data_id_df = load_timeseries_features(feature_file)
+yield_df = load_yield_data()
+
+adm_yield_df = yield_df.iloc[9:23]
+
+fig, ax = plt.subplots(figsize=(5, 5))
+plt.plot(adm_yield_df["harv_year"], adm_yield_df["yield"], color="grey")
+plt.ylabel("Yield (T/ha)")
+# Remove right and upper boundaries
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+plt.savefig("graphics/Dedza_yield_ts.svg", format="svg")
+plt.show()
+
+good_idx = 19 # good year 2021
+flood_idx = 18 # flood year 2019
+drought_idx = 15 # drought year 2016
+
+fig, ax = plt.subplots(3, 1, figsize=(6, 5))
+
+for ax_i, idx in zip(ax, [good_idx, flood_idx, drought_idx]):
+    ex = timeseries_feature_ndarray[idx]
+    feature_ls = [arr[0][:-2] for arr in feature_names]
+
+    sns.heatmap(ex.T, ax=ax_i, cmap="vlag", vmin=-2.5, vmax=2.5)
+
+    # Set the y-axis (vertical) ticks using feature_names
+    ax_i.set_yticks([i + 0.5 for i in range(len(feature_names))])
+    ax_i.set_yticklabels(feature_ls, rotation=0, va='center')
+
+    # Remove x-axis ticks
+    ax_i.set_xticks([])
+
+    # Customize the color bar to show only "Low" and "High"
+    cbar = ax_i.collections[0].colorbar
+    cbar.set_ticks([cbar.vmin, cbar.vmax])
+    cbar.set_ticklabels(['Low', 'High'])
+
+    # Add a thin border around the heatmap
+    for spine in ax_i.spines.values():
+        spine.set_visible(True)
+        spine.set_linewidth(0.5)  # Set the border width to 0.5
+plt.tight_layout()
+plt.savefig("graphics/good_flood_droght_feature_matricies.svg", format="svg")
+plt.show()
