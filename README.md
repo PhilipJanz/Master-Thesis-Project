@@ -1,5 +1,4 @@
-# Modeling Maize Yield in Sub-Saharan Africa Using Machine
-Learning: Overcoming Data Scarcity with Transfer Learning
+# Modeling Maize Yield in Sub-Saharan Africa Using Machine Learning: Overcoming Data Scarcity with Transfer Learning
 This project units all methods needed to apply maize yield modeling, using various models. It was developed to predict maize yields for Tanzania, Malawi and Zambia.
 The structure allows to add other countries as well. In this case the following steps should guide the user to accomplish this goal.
 The order of those steps is generally important since the processing steps are dependent on each  other.
